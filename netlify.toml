@@ -1,0 +1,17 @@
+# Netlify Monorepo Configuration for Next.js 15 App Router
+
+[build]
+  base = "apps/web"
+  command = "pnpm --filter @platform/web build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PNPM_VERSION = "9.15.4"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Cache node_modules and turbo cache across builds
+[build.processing]
+  skip_processing = false

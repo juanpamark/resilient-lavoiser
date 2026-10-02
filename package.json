@@ -1,0 +1,27 @@
+{
+  "name": "platform-saas-root",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-tenant AI Agent SaaS Platform",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:isolation": "tsx scripts/test-isolation.ts",
+    "test:e2e": "pnpm --filter @platform/web test:e2e",
+    "test:health": "tsx scripts/health-check.ts",
+    "clean": "turbo run clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.2",
+    "tsx": "^4.19.3",
+    "turbo": "^2.4.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

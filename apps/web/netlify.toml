@@ -1,10 +1,8 @@
+# Netlify Configuration if Base directory is set to apps/web
 [build]
-  command = "pnpm --filter @platform/web build"
+  command = "cd ../.. && pnpm build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
   PNPM_VERSION = "9.15.4"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"

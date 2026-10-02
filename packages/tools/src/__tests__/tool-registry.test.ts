@@ -13,9 +13,11 @@ describe('ToolRegistry', () => {
     expect(registry.has('calculate_order')).toBe(true);
     expect(registry.has('create_order')).toBe(true);
     expect(registry.has('transfer_to_human')).toBe(true);
+    expect(registry.has('check_availability')).toBe(true);
+    expect(registry.has('book_appointment')).toBe(true);
 
     const tools = registry.list();
-    expect(tools.length).toBe(6);
+    expect(tools.length).toBe(8);
   });
 
   it('should export valid JSON Schema declarations for enabled tools', () => {

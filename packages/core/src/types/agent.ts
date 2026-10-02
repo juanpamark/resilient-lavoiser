@@ -2,6 +2,15 @@
  * AI Agent definitions
  */
 
+export const DEFAULT_AGENT_NAME = 'agilizio';
+
+export type IndustryType =
+  | 'food_and_beverage'
+  | 'health_and_wellness'
+  | 'retail_and_ecommerce'
+  | 'professional_services'
+  | 'general';
+
 export type AgentStatus = 'active' | 'inactive' | 'training';
 
 export interface ModelConfig {
@@ -16,6 +25,7 @@ export interface AgentConfig {
   id: string; // UUID v7
   agent_id: string; // UUID v7
   version: number;
+  industry?: IndustryType;
   
   // Modular prompt sections
   system_instructions: string;
@@ -32,6 +42,8 @@ export interface AgentConfig {
     cancellation_policy?: string;
     special_notes?: string;
   };
+  
+  few_shot_examples?: Array<{ user: string; assistant: string }>;
   
   // Behavioral and tool controls
   enabled_tools: string[]; // List of registered tool names

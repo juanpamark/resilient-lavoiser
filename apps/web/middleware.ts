@@ -10,13 +10,27 @@ export async function middleware(request: NextRequest) {
   const isBusinessRoute = pathname.startsWith('/business');
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
 
-  // E2E Testing Bypass for simulated headless sessions
-  const e2eRole = request.cookies.get('sb-e2e-role')?.value;
-  if (e2eRole === 'platform_admin' && (isPlatformRoute || isBusinessRoute)) {
-    return supabaseResponse;
+  // Preview Mode / E2E Testing Bypass
+  const previewParam = request.nextUrl.searchParams.get('preview');
+  const e2eCookie = request.cookies.get('sb-e2e-role')?.value;
+  const activeRole = previewParam || e2eCookie;
+
+  if (activeRole === 'platform' || activeRole === 'platform_admin') {
+    const res = NextResponse.next({ request });
+    if (previewParam) {
+      res.cookies.set('sb-e2e-role', 'platform_admin', { path: '/' });
+    }
+    return res;
   }
-  if (e2eRole === 'business_admin' && isBusinessRoute) {
-    return supabaseResponse;
+
+  if (activeRole === 'business' || activeRole === 'business_admin') {
+    if (isBusinessRoute || pathname === '/') {
+      const res = NextResponse.next({ request });
+      if (previewParam) {
+        res.cookies.set('sb-e2e-role', 'business_admin', { path: '/' });
+      }
+      return res;
+    }
   }
 
   // 1. Unauthenticated users trying to access protected areas

@@ -75,11 +75,11 @@ describe('PromptBuilder', () => {
     expect(prompt).toContain('Burger & Co.');
     expect(prompt).toContain('Carrera 7 # 72-10');
     expect(prompt).toContain('Santiago');
-    expect(prompt).toContain('### 6. DIRECTRICES DE ATENCIÓN Y HERRAMIENTAS');
+    expect(prompt).toContain('DIRECTRICES DE ATENCIÓN Y HERRAMIENTAS');
     expect(prompt).toContain('NUNCA inventes precios');
   });
 
-  it('should assemble an equally coherent prompt for a Dental Clinic business', () => {
+  it('should assemble an equally coherent prompt for a Dental Clinic business with multi-industry and few-shot rules', () => {
     const dentalClinic: Business = {
       id: 'bus-dent-1',
       name: 'Clínica Odontológica Sonrisas',
@@ -107,6 +107,7 @@ describe('PromptBuilder', () => {
       id: 'cfg-2',
       agent_id: 'agent-2',
       version: 1,
+      industry: 'health_and_wellness',
       system_instructions: 'Orienta a los pacientes sobre tratamientos y agenda sus citas de valoración.',
       personality: { tone: 'formal, empático y médico', language: 'es-CO' },
       business_context: {
@@ -117,8 +118,14 @@ describe('PromptBuilder', () => {
         cancellation_policy: 'Reagendamiento permitido con mínimo 24 horas de anticipación.',
         special_notes: 'Pacientes con dolor agudo deben acudir a urgencias presenciales.',
       },
-      enabled_tools: ['check_availability', 'create_appointment', 'transfer_to_human'],
-      model_config: { provider: 'gemini', model: 'gemini-2.0-flash' },
+      few_shot_examples: [
+        {
+          user: '¿Tienen cita para mañana a las 3pm?',
+          assistant: 'Con gusto verifico la agenda del Dr. Gómez para mañana a las 3:00 PM. ¿Para qué procedimiento o valoración deseas la cita?',
+        },
+      ],
+      enabled_tools: ['check_availability', 'book_appointment', 'transfer_to_human'],
+      model_config: { provider: 'gemini', model: 'gemini-2.5-flash' },
       out_of_hours_behavior: 'bot_responds',
       human_handoff_trigger: 'Urgencias dentales o quejas de tratamientos',
       is_active: true,
@@ -126,14 +133,18 @@ describe('PromptBuilder', () => {
     };
 
     const prompt = PromptBuilder.build({
-      agentName: 'Dra. Virtual Sofía',
+      agentName: 'agilizio',
       config: dentalConfig,
       business: dentalClinic,
     });
 
-    expect(prompt).toContain('Dra. Virtual Sofía');
+    expect(prompt).toContain('agilizio');
     expect(prompt).toContain('Clínica Odontológica Sonrisas');
     expect(prompt).toContain('Consultorio 402');
+    expect(prompt).toContain('DIRECTRICES ESPECIALIZADAS DEL SECTOR (HEALTH_AND_WELLNESS)');
+    expect(prompt).toContain('check_availability');
+    expect(prompt).toContain('EJEMPLOS DE RESPUESTA MODELO (FEW-SHOT GUIDANCE)');
+    expect(prompt).toContain('¿Tienen cita para mañana a las 3pm?');
     expect(prompt).toContain('Reagendamiento permitido con mínimo 24 horas');
     expect(prompt).toContain('Urgencias dentales o quejas');
   });

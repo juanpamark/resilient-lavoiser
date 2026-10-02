@@ -20,3 +20,4 @@ export * from './definitions/business-info.tool.js';
 export * from './definitions/catalog.tools.js';
 export * from './definitions/order.tools.js';
 export * from './definitions/handoff.tool.js';
+export * from './definitions/appointment.tools.js';

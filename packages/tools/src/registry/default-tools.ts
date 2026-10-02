@@ -3,6 +3,7 @@ import { getBusinessInfoTool } from '../definitions/business-info.tool.js';
 import { searchProductsTool, getProductDetailsTool } from '../definitions/catalog.tools.js';
 import { calculateOrderTool, createOrderTool } from '../definitions/order.tools.js';
 import { transferToHumanTool } from '../definitions/handoff.tool.js';
+import { checkAvailabilityTool, bookAppointmentTool } from '../definitions/appointment.tools.js';
 
 export function registerDefaultTools(registry?: ToolRegistry): ToolRegistry {
   const reg = registry || ToolRegistry.getInstance();
@@ -13,6 +14,8 @@ export function registerDefaultTools(registry?: ToolRegistry): ToolRegistry {
   reg.register(calculateOrderTool);
   reg.register(createOrderTool);
   reg.register(transferToHumanTool);
+  reg.register(checkAvailabilityTool);
+  reg.register(bookAppointmentTool);
 
   return reg;
 }

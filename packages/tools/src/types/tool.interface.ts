@@ -21,5 +21,5 @@ export interface ToolDefinition<TArgs = any, TResult = any> {
   description: string;
   schema: z.ZodType<TArgs, any, any>;
   execute: (args: TArgs, context: ToolExecutionContext) => Promise<TResult>;
-  category?: 'business' | 'catalog' | 'order' | 'support';
+  category?: 'business' | 'catalog' | 'order' | 'support' | 'appointment';
 }

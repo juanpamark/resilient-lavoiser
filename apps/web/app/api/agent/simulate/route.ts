@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       ],
       model_config: {
         provider: 'gemini',
-        model: 'gemini-2.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
         temperature: 0.7,
       },
       out_of_hours_behavior: 'bot_responds',

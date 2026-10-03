@@ -82,7 +82,7 @@ export default function HomePage() {
 
               <div className="space-y-2 mb-6">
                 <Link
-                  href="/platform/dashboard?preview=platform"
+                  href="/platform/dashboard"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export default function HomePage() {
                 </Link>
 
                 <Link
-                  href="/platform/businesses?preview=platform"
+                  href="/platform/businesses"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -102,7 +102,7 @@ export default function HomePage() {
                 </Link>
 
                 <Link
-                  href="/platform/analytics?preview=platform"
+                  href="/platform/analytics"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export default function HomePage() {
             </div>
 
             <Link
-              href="/platform/dashboard?preview=platform"
+              href="/platform/dashboard"
               className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-colors shadow-lg shadow-blue-600/20"
             >
               Abrir Panel Platform Admin
@@ -140,7 +140,7 @@ export default function HomePage() {
 
               <div className="space-y-2 mb-6">
                 <Link
-                  href="/business/inbox?preview=business"
+                  href="/business/inbox"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2 font-medium text-emerald-400">
@@ -150,7 +150,7 @@ export default function HomePage() {
                 </Link>
 
                 <Link
-                  href="/business/agent?preview=business"
+                  href="/business/agent"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -160,7 +160,7 @@ export default function HomePage() {
                 </Link>
 
                 <Link
-                  href="/business/channels?preview=business"
+                  href="/business/channels"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -170,7 +170,7 @@ export default function HomePage() {
                 </Link>
 
                 <Link
-                  href="/business/catalog?preview=business"
+                  href="/business/catalog"
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 text-xs text-slate-300 hover:text-white border border-slate-800 transition-colors"
                 >
                   <span className="flex items-center gap-2">
@@ -182,7 +182,7 @@ export default function HomePage() {
             </div>
 
             <Link
-              href="/business/inbox?preview=business"
+              href="/business/inbox"
               className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-600/20"
             >
               Abrir Live Inbox en Vivo

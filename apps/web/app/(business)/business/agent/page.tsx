@@ -436,7 +436,7 @@ export default function BusinessAgentPage() {
               agilizio Studio
             </h2>
             <Badge variant="purple">Motor agilizio v1.0</Badge>
-            <Badge variant="default">Gemini 2.5 Flash</Badge>
+            <Badge variant="default">Gemini 3.8 Flash</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
             Configura el cerebro conversacional de tu negocio con soporte multi-industria, calibración de prompts y herramientas deterministas.
@@ -786,7 +786,7 @@ export default function BusinessAgentPage() {
               <div>
                 <h3 className="font-semibold text-sm">Simulador agilizio</h3>
                 <span className="text-[10px] text-blue-300 capitalize font-mono">
-                  {selectedIndustry} | Gemini 2.5 Flash
+                  {selectedIndustry} | Gemini 3.8 Flash
                 </span>
               </div>
             </div>

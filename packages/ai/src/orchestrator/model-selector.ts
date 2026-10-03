@@ -17,20 +17,23 @@ export class ModelSelector {
 
     if (provider === 'gemini') {
       if (complexity === 'fast') {
-        return { provider: 'gemini', model: 'gemini-2.0-flash-lite' };
+        return { provider: 'gemini', model: 'gemini-3.8-flash' };
       }
       if (complexity === 'complex') {
         return { provider: 'gemini', model: 'gemini-2.0-pro' };
       }
       return {
         provider: 'gemini',
-        model: config?.model || 'gemini-2.0-flash',
+        model:
+          config?.model && config.model !== 'gemini-2.5-flash'
+            ? config.model
+            : process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       };
     }
 
     return {
       provider,
-      model: config?.model || 'gemini-2.0-flash',
+      model: config?.model || process.env.GEMINI_MODEL || 'gemini-3.8-flash',
     };
   }
 }

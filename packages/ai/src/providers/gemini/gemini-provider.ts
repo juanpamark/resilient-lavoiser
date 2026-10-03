@@ -24,11 +24,14 @@ export class GeminiProvider implements AIProvider {
   constructor(options: GeminiProviderOptions = {}) {
     const apiKey = options.apiKey || process.env.GEMINI_API_KEY || '';
     this.client = new GoogleGenAI({ apiKey });
-    this.defaultModel = options.defaultModel || 'gemini-2.0-flash';
+    this.defaultModel = options.defaultModel || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
-    const model = request.model || this.defaultModel;
+    let model = request.model || this.defaultModel;
+    if (model === 'gemini-2.5-flash' || model === 'models/gemini-2.5-flash') {
+      model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    }
 
     // 1. Adapt canonical messages into Gemini turn structure
     const adapted = GeminiTurnAdapter.adapt(request.messages, request.systemInstruction);

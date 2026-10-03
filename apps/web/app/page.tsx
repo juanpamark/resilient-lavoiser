@@ -25,7 +25,7 @@ export default function HomePage() {
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-base tracking-tight text-white">Platform SaaS</span>
+              <span className="font-bold text-base tracking-tight text-white">agilizio</span>
               <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-2 py-0.5 rounded-full ml-2">
                 v1.0 Producción
               </span>
@@ -49,16 +49,16 @@ export default function HomePage() {
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-6">
             <Sparkles className="w-4 h-4" />
-            Previsualización Interactiva Local
+            agilizio AI Engine
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            Plataforma Multi-Tenant de Agentes de IA para{' '}
+            Agentes Inteligentes Conversacionales con{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400">
-              WhatsApp
+              agilizio
             </span>
           </h1>
           <p className="mt-4 text-base text-slate-400 leading-relaxed">
-            Arquitectura de 14 fases con Google Gemini 2.5 Flash, PostgreSQL RLS, WebSockets en tiempo real y facturación directa en Meta.
+            Plataforma multi-tenant de agentes de IA para WhatsApp, agendamiento de citas y gestión de pedidos con Google Gemini 2.5 Flash y Supabase.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>Platform SaaS — Multi-Tenant Architecture & Production Ready Engine</p>
+        <p>agilizio — Plataforma de Agentes de IA Conversacionales</p>
       </footer>
     </div>
   );

@@ -10,8 +10,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@platform/ai": "workspace:*",
     "@platform/channels": "workspace:*",
     "@platform/core": "workspace:*",
+    "@platform/tools": "workspace:*",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
     "lucide-react": "^1.49.0",

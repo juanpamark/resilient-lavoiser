@@ -23,8 +23,8 @@ export default function PlatformLayout({
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-bold text-slate-900 text-sm tracking-tight">Platform Admin</h1>
-            <p className="text-xs text-slate-500 font-medium">Panel de Agencia</p>
+            <h1 className="font-bold text-slate-900 text-sm tracking-tight">agilizio Admin</h1>
+            <p className="text-xs text-slate-500 font-medium">Panel de Plataforma</p>
           </div>
         </div>
 

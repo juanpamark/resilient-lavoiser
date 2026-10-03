@@ -347,8 +347,8 @@ export default function BusinessAgentPage() {
     setTimeout(() => setSavedNotification(false), 3500);
   };
 
-  // Simulator Message Handler
-  const handleSendSimMessage = (e: React.FormEvent) => {
+  // Simulator Message Handler (Connected to Live Gemini & Supabase API)
+  const handleSendSimMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!simInput.trim() || isSimLoading) return;
 
@@ -362,49 +362,44 @@ export default function BusinessAgentPage() {
     setSimInput('');
     setIsSimLoading(true);
 
-    // Simulate intelligent agilizio reasoning response according to industry
-    setTimeout(() => {
-      let responseText = '';
-      let toolCallSimulation: string | undefined;
+    try {
+      const response = await fetch('/api/agent/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userText,
+          history: simMessages.map((m) => ({ role: m.role, content: m.content })),
+          selectedIndustry,
+          agentConfig: {
+            system_instructions: systemInstructions,
+            personality: { tone, language },
+            policies: {
+              return_policy: returnPolicy,
+              cancellation_policy: cancellationPolicy,
+            },
+            business_context: {
+              overview: '',
+              faq: faqs.map((f) => ({ question: f.q, answer: f.a })),
+            },
+            few_shot_examples: fewShots.map((f) => ({ user: f.user, assistant: f.assistant })),
+            enabled_tools: Object.entries(enabledTools)
+              .filter(([_, enabled]) => enabled)
+              .map(([id]) => id),
+          },
+        }),
+      });
 
-      const lower = userText.toLowerCase();
+      const data = await response.json();
 
-      if (selectedIndustry === 'health_and_wellness') {
-        if (lower.includes('cita') || lower.includes('agenda') || lower.includes('horario') || lower.includes('doctor')) {
-          toolCallSimulation = '🔧 Tool Invocada: check_availability({ service_type: "Cita Valoración", preferred_date: "mañana" })';
-          responseText =
-            '¡Con gusto! Consultando nuestra disponibilidad médica en tiempo real, tenemos cupos disponibles para mañana a las 10:00 AM y a las 3:30 PM. ¿Cuál de estos horarios te resulta más conveniente para agendar tu consulta?';
-        } else if (lower.includes('costo') || lower.includes('precio') || lower.includes('gratis')) {
-          responseText =
-            'Nuestra primera sesión de valoración clínica es totalmente gratuita y sin compromiso. ¿Deseas que te reservemos un espacio esta semana?';
-        } else {
-          responseText =
-            'Comprendo perfectamente tu consulta. Con el cuidado y empatía que nos caracteriza en salud, ¿en qué fecha te gustaría programar tu valoración o qué información adicional necesitas?';
-        }
-      } else if (selectedIndustry === 'food_and_beverage') {
-        if (lower.includes('pedir') || lower.includes('pizza') || lower.includes('hamburguesa') || lower.includes('menu') || lower.includes('plato')) {
-          toolCallSimulation = '🔧 Tool Invocada: search_products({ query: "menú principal" })';
-          responseText =
-            '¡Excelente elección! Tenemos disponibles nuestras pizzas artesanales en masa madre y hamburguesas gourmet. ¿Te gustaría ordenar alguna opción en particular o deseas acompañarla con alguna de nuestras bebidas frías?';
-        } else if (lower.includes('cuanto') || lower.includes('cuenta') || lower.includes('total')) {
-          toolCallSimulation = '🔧 Tool Invocada: calculate_order({ items: [{ product_name: "Plato Principal", quantity: 1, unit_price: 28000 }], delivery_fee: 5000 })';
-          responseText =
-            'El total estimado para tu orden es de $33,000 COP (Plato: $28,000 + Domicilio: $5,000). ¿A qué dirección te gustaría recibirlo?';
-        } else {
-          responseText =
-            '¡Hola! En nuestro restaurante preparamos cada plato al momento. ¿Te gustaría consultar nuestra carta de hoy o realizar un pedido a domicilio?';
-        }
-      } else if (selectedIndustry === 'retail_and_ecommerce') {
-        if (lower.includes('talla') || lower.includes('color') || lower.includes('envio') || lower.includes('comprar')) {
-          toolCallSimulation = '🔧 Tool Invocada: search_products({ query: "stock y tallas disponibles" })';
-          responseText =
-            '¡Hola! Confirmando en nuestro inventario, tenemos disponibilidad en tallas S, M y L con despacho prioritario a nivel nacional. ¿Hacia qué ciudad o municipio sería el envío?';
-        } else {
-          responseText =
-            '¡Bienvenido a nuestra tienda! Puedes preguntarme por cualquier prenda, accesorios o consultar el estado de tu pedido.';
-        }
-      } else {
-        responseText = `Entendido. Como agilizio, analizo tu requerimiento con un enfoque ${tone}. ¿Deseas coordinar una sesión de diagnóstico exploratorio con uno de nuestros consultores senior?`;
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al procesar la respuesta');
+      }
+
+      let toolCallSummary: string | undefined;
+      if (data.toolCallsExecuted && data.toolCallsExecuted.length > 0) {
+        toolCallSummary = data.toolCallsExecuted
+          .map((tc: any) => `🔧 Tool: ${tc.name}(${JSON.stringify(tc.args)})`)
+          .join(' | ');
       }
 
       setSimMessages((prev) => [
@@ -412,12 +407,22 @@ export default function BusinessAgentPage() {
         {
           id: `bot-${Date.now()}`,
           role: 'assistant',
-          content: responseText,
-          toolCall: toolCallSimulation,
+          content: data.text || 'Sin respuesta',
+          toolCall: toolCallSummary,
         },
       ]);
+    } catch (err: any) {
+      setSimMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          role: 'assistant',
+          content: `⚠️ Error de conexión con agilizio: ${err.message}`,
+        },
+      ]);
+    } finally {
       setIsSimLoading(false);
-    }, 900);
+    }
   };
 
   return (

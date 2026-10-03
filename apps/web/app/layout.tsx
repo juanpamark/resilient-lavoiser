@@ -3,8 +3,8 @@ import React from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Platform SaaS - AI Agents Multi-Tenant',
-  description: 'Enterprise Multi-tenant AI Agent Platform for WhatsApp Cloud API',
+  title: 'agilizio - Agentes de IA para Empresas',
+  description: 'agilizio: Plataforma multi-tenant de agentes de inteligencia artificial para WhatsApp y canales conversacionales.',
 };
 
 export default function RootLayout({

@@ -29,7 +29,9 @@ export default function BusinessLayout({
             <h1 className="font-bold text-slate-900 text-sm tracking-tight truncate">
               La Casona Gourmet
             </h1>
-            <p className="text-xs text-slate-500 font-medium">Panel de Negocio</p>
+            <p className="text-[11px] text-blue-600 font-semibold flex items-center gap-1">
+              agilizio Business
+            </p>
           </div>
         </div>
 

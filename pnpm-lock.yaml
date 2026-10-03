@@ -26,12 +26,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@platform/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@platform/channels':
         specifier: workspace:*
         version: link:../../packages/channels
       '@platform/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@platform/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       '@supabase/ssr':
         specifier: ^0.5.2
         version: 0.5.2(@supabase/supabase-js@2.117.2)

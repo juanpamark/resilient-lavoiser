@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
   const { supabaseResponse, user, claims } = await updateSession(request);
 
   const isPlatformRoute = pathname.startsWith('/platform');
+  const isAdminRoute = pathname.startsWith('/admin');
   const isBusinessRoute = pathname.startsWith('/business');
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
 
@@ -33,15 +34,29 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 1. Unauthenticated users trying to access protected areas
-  if (!user && (isPlatformRoute || isBusinessRoute)) {
+  // 1. Unauthenticated users trying to access protected areas (/platform/*, /business/*, /admin/*)
+  if (!user && (isPlatformRoute || isBusinessRoute || isAdminRoute)) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
     redirectUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // 2. Platform Admin routes (/platform/*)
+  // 2. Admin alias route handling (/admin/* -> /platform/*)
+  if (isAdminRoute && user) {
+    const redirectUrl = request.nextUrl.clone();
+    if (claims?.is_platform_admin) {
+      redirectUrl.pathname = '/platform/dashboard';
+    } else if (claims?.business_id) {
+      redirectUrl.pathname = '/business/dashboard';
+    } else {
+      redirectUrl.pathname = '/login';
+      redirectUrl.searchParams.set('error', 'unauthorized_platform_admin');
+    }
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  // 3. Platform Admin routes (/platform/*)
   if (isPlatformRoute && user) {
     if (!claims?.is_platform_admin) {
       // Non-platform admin attempting to access platform routes

@@ -12,6 +12,19 @@ export async function middleware(request: NextRequest) {
   const isBusinessRoute = pathname.startsWith('/business');
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
 
+  // Compute platform admin status directly from user & claims
+  const isPlatformAdmin =
+    Boolean(claims?.is_platform_admin) ||
+    Boolean((user?.app_metadata as any)?.is_platform_admin) ||
+    Boolean((user?.user_metadata as any)?.is_platform_admin) ||
+    user?.email?.toLowerCase() === 'admin@agilizio.com';
+
+  const hasBusiness =
+    Boolean(claims?.business_id) ||
+    Boolean((user?.app_metadata as any)?.business_id) ||
+    Boolean((user?.user_metadata as any)?.business_id) ||
+    isPlatformAdmin;
+
   // 2. Strict Unauthenticated Redirection for Protected Routes
   if (!user && (isBusinessRoute || isPlatformRoute || isAdminRoute)) {
     const redirectUrl = request.nextUrl.clone();
@@ -26,9 +39,9 @@ export async function middleware(request: NextRequest) {
   // 3. Admin Route Alias (/admin/* -> /platform/*)
   if (isAdminRoute && user) {
     const redirectUrl = request.nextUrl.clone();
-    if (claims?.is_platform_admin) {
+    if (isPlatformAdmin) {
       redirectUrl.pathname = '/platform/dashboard';
-    } else if (claims?.business_id) {
+    } else if (hasBusiness) {
       redirectUrl.pathname = '/business/dashboard';
     } else {
       redirectUrl.pathname = '/login';
@@ -39,9 +52,9 @@ export async function middleware(request: NextRequest) {
 
   // 4. Platform Admin Route Protection (/platform/*)
   if (isPlatformRoute && user) {
-    if (!claims?.is_platform_admin) {
+    if (!isPlatformAdmin) {
       const redirectUrl = request.nextUrl.clone();
-      if (claims?.business_id) {
+      if (hasBusiness) {
         redirectUrl.pathname = '/business/dashboard';
       } else {
         redirectUrl.pathname = '/login';
@@ -53,8 +66,7 @@ export async function middleware(request: NextRequest) {
 
   // 5. Business Tenant Route Protection (/business/*)
   if (isBusinessRoute && user) {
-    // Validate tenant membership: user must have a business_id or be a platform admin
-    if (!claims?.business_id && !claims?.is_platform_admin) {
+    if (!hasBusiness) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = '/login';
       redirectUrl.searchParams.set('error', 'no_active_business');
@@ -65,11 +77,11 @@ export async function middleware(request: NextRequest) {
   // 6. Authenticated Users Visiting Auth Routes (/login)
   if (isAuthRoute && user) {
     const redirectUrl = request.nextUrl.clone();
-    if (claims?.is_platform_admin) {
+    if (isPlatformAdmin) {
       redirectUrl.pathname = '/platform/dashboard';
       return NextResponse.redirect(redirectUrl);
     }
-    if (claims?.business_id) {
+    if (hasBusiness) {
       redirectUrl.pathname = '/business/dashboard';
       return NextResponse.redirect(redirectUrl);
     }

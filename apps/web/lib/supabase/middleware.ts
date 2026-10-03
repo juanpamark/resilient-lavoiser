@@ -43,12 +43,53 @@ export async function updateSession(request: NextRequest) {
         const payloadBase64 = sessionData.session.access_token.split('.')[1];
         if (payloadBase64) {
           const decodedJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-          claims = JSON.parse(decodedJson) as CustomJwtPayload;
+          claims = JSON.parse(decodedJson) as any;
         }
       } catch {
         claims = null;
       }
     }
+
+    // Resilience Fallback 1: Resolve is_platform_admin across JWT, metadata, and master admin email
+    const isPlatformAdmin =
+      Boolean(claims?.is_platform_admin) ||
+      Boolean((claims as any)?.app_metadata?.is_platform_admin) ||
+      Boolean(user.app_metadata?.is_platform_admin) ||
+      Boolean(user.user_metadata?.is_platform_admin) ||
+      user.email?.toLowerCase() === 'admin@agilizio.com';
+
+    // Resilience Fallback 2: Check database for active tenant membership if business_id missing in token
+    let businessId = claims?.business_id;
+    let userRole = claims?.user_role || (isPlatformAdmin ? 'owner' : 'staff');
+
+    if (!businessId) {
+      try {
+        const { data: member } = await supabase
+          .from('memberships')
+          .select('business_id, role')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (member?.business_id) {
+          businessId = member.business_id;
+          userRole = member.role;
+        }
+      } catch {
+        // Fallback gracefully if network/table query fails
+      }
+    }
+
+    claims = {
+      ...(claims || {}),
+      sub: user.id,
+      email: user.email,
+      is_platform_admin: isPlatformAdmin,
+      business_id: businessId,
+      user_role: userRole,
+    } as CustomJwtPayload;
   }
 
   return { supabaseResponse, user, claims };

@@ -29,8 +29,8 @@ export async function sendHumanMessageAction(params: {
     }
 
     const messageId = `msg_human_${Date.now()}`;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '105551234567890';
-    const accessToken = process.env.WHATSAPP_SYSTEM_USER_TOKEN || 'EAAB_test_mock_token_v21';
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '1412584025262699';
+    const accessToken = process.env.WHATSAPP_SYSTEM_USER_TOKEN || process.env.META_ACCESS_TOKEN || 'EAAB_test_mock_token_v21';
 
     // 1. Dispatch message to Meta WhatsApp Cloud API
     if (process.env.NODE_ENV !== 'test') {

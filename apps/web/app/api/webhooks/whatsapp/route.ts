@@ -29,8 +29,8 @@ router.registerConnection({
   businessId: '018f3a5b-0001-7000-8000-000000000001',
   channelType: 'whatsapp',
   wabaId: '109876543210987',
-  phoneNumberId: '105551234567890',
-  accessToken: process.env.WHATSAPP_SYSTEM_USER_TOKEN || 'EAAB_test_mock_token_v21',
+  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '1412584025262699',
+  accessToken: process.env.WHATSAPP_SYSTEM_USER_TOKEN || process.env.META_ACCESS_TOKEN || 'EAAB_test_mock_token_v21',
   billingType: 'client_direct_meta',
   isActive: true,
 });
@@ -73,7 +73,10 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN || 'platform_verify_secret_token';
+  const expectedToken =
+    process.env.WHATSAPP_VERIFY_TOKEN ||
+    process.env.META_WEBHOOK_VERIFY_TOKEN ||
+    'platform_verify_secret_token';
 
   const verification = WhatsAppSignatureValidator.verifyHandshake({
     mode,
@@ -100,7 +103,10 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
     const signature = request.headers.get('x-hub-signature-256');
-    const appSecret = process.env.WHATSAPP_APP_SECRET || 'test_meta_app_secret_123';
+    const appSecret =
+      process.env.WHATSAPP_APP_SECRET ||
+      process.env.META_APP_SECRET ||
+      'test_meta_app_secret_123';
 
     // In dev/test if app secret is not enforced, allow skip or validate
     const skipCheck = process.env.NODE_ENV === 'test' && !signature;

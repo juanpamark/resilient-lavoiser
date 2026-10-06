@@ -61,12 +61,41 @@ export class GeminiProvider implements AIProvider {
       config.tools = [{ functionDeclarations }];
     }
 
-    // 4. Invoke Gemini API
-    const response = await this.client.models.generateContent({
-      model,
-      contents: adapted.contents,
-      config,
-    });
+    // 4. Invoke Gemini API with automatic high-demand fallback and retry
+    const fallbackModels = [model, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let response: any = null;
+    let actualModelUsed = model;
+    let lastError: any = null;
+
+    for (const candidateModel of fallbackModels) {
+      try {
+        response = await this.client.models.generateContent({
+          model: candidateModel,
+          contents: adapted.contents,
+          config,
+        });
+        actualModelUsed = candidateModel;
+        break;
+      } catch (err: any) {
+        lastError = err;
+        const errStr = String(err?.message || '');
+        const isHighDemandOrOverloaded =
+          err?.status === 503 ||
+          err?.code === 503 ||
+          errStr.includes('high demand') ||
+          errStr.includes('UNAVAILABLE') ||
+          errStr.includes('503');
+
+        if (!isHighDemandOrOverloaded) {
+          throw err;
+        }
+        console.warn(`[Gemini Provider]: Model ${candidateModel} high demand (503). Retrying with alternative model...`);
+      }
+    }
+
+    if (!response) {
+      throw lastError;
+    }
 
     // 5. Parse response candidate and finish reason
     const candidate = response.candidates?.[0];
@@ -98,7 +127,7 @@ export class GeminiProvider implements AIProvider {
         outputTokens,
         totalTokens: inputTokens + outputTokens,
       },
-      modelUsed: model,
+      modelUsed: actualModelUsed,
       finishReason,
     };
   }

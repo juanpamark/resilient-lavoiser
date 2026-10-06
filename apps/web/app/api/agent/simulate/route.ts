@@ -243,27 +243,31 @@ export async function POST(req: NextRequest) {
     const hasGeminiKey = !!process.env.GEMINI_API_KEY;
 
     if (hasGeminiKey) {
-      const orchestrator = new AIOrchestrator();
-      const result = await orchestrator.processMessage({
-        business: currentBusiness,
-        agentConfig: effectiveConfig,
-        agentName: 'agilizio',
-        conversationId: 'conv_sim_live',
-        history: formattedHistory,
-        incomingUserText: message,
-        availableTools,
-        toolExecutor,
-        maxToolIterations: 4,
-      });
+      try {
+        const orchestrator = new AIOrchestrator();
+        const result = await orchestrator.processMessage({
+          business: currentBusiness,
+          agentConfig: effectiveConfig,
+          agentName: 'agilizio',
+          conversationId: 'conv_sim_live',
+          history: formattedHistory,
+          incomingUserText: message,
+          availableTools,
+          toolExecutor,
+          maxToolIterations: 4,
+        });
 
-      return NextResponse.json({
-        text: result.text,
-        toolCallsExecuted: result.toolCallsExecuted,
-        usage: result.usage,
-        modelUsed: result.modelUsed,
-        latencyMs: result.latencyMs,
-        isLiveAI: true,
-      });
+        return NextResponse.json({
+          text: result.text,
+          toolCallsExecuted: result.toolCallsExecuted,
+          usage: result.usage,
+          modelUsed: result.modelUsed,
+          latencyMs: result.latencyMs,
+          isLiveAI: true,
+        });
+      } catch (aiError: any) {
+        console.warn('Live Gemini call encountered a transient error, using resilient business responder:', aiError?.message);
+      }
     }
 
     // 8. Resilient Fallback if GEMINI_API_KEY is not configured in local environment

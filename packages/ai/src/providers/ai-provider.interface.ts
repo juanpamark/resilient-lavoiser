@@ -14,6 +14,7 @@ export interface FunctionCallPart {
   id?: string;
   name: string;
   args: Record<string, unknown>;
+  thoughtSignature?: string;
 }
 
 export interface FunctionResponsePart {

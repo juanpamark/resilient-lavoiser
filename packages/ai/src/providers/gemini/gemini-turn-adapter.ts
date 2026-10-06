@@ -16,11 +16,15 @@ import type {
 
 export interface GeminiPart {
   text?: string;
+  thoughtSignature?: string;
+  thought_signature?: string;
   functionCall?: {
+    id?: string;
     name?: string;
     args?: Record<string, unknown>;
   };
   functionResponse?: {
+    id?: string;
     name: string;
     response: Record<string, unknown>;
   };
@@ -63,12 +67,17 @@ export class GeminiTurnAdapter {
           if (p.type === 'text') {
             parts.push({ text: p.text });
           } else if (p.type === 'function_call') {
-            parts.push({
+            const partObj: GeminiPart = {
               functionCall: {
                 name: p.name,
                 args: p.args,
+                ...(p.id ? { id: p.id } : {}),
               },
-            });
+            };
+            if (p.thoughtSignature) {
+              partObj.thoughtSignature = p.thoughtSignature;
+            }
+            parts.push(partObj);
           }
         }
         if (parts.length > 0) {
@@ -150,6 +159,8 @@ export class GeminiTurnAdapter {
           type: 'function_call',
           name: part.functionCall.name,
           args: (part.functionCall.args as Record<string, unknown>) || {},
+          thoughtSignature: (part as any).thoughtSignature || (part as any).thought_signature,
+          id: (part.functionCall as any).id || (part as any).id,
         });
       }
     }

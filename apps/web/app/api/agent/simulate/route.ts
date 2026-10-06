@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       ],
       model_config: {
         provider: 'gemini',
-        model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+        model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
         temperature: 0.7,
       },
       out_of_hours_behavior: 'bot_responds',
@@ -164,14 +164,26 @@ export async function POST(req: NextRequest) {
       context: { businessId: string; conversationId: string }
     ) => {
       if (name === 'search_products') {
-        const query = typeof args.query === 'string' ? args.query.toLowerCase() : '';
-        const filtered = liveProducts.filter((p) =>
-          !query || p.name.toLowerCase().includes(query) || (p.description && p.description.toLowerCase().includes(query)) || p.category?.toLowerCase().includes(query)
-        );
+        const query = typeof args.query === 'string' ? args.query.toLowerCase().trim() : '';
+        const queryTokens = query
+          .split(/[^a-záéíóú0-9]+/i)
+          .map((t) => t.trim())
+          .filter((w) => w.length > 2);
+
+        const filtered = liveProducts.filter((p) => {
+          if (!query || queryTokens.length === 0) return true;
+          const target = `${p.name} ${p.description || ''} ${p.category || ''}`.toLowerCase();
+          if (query.includes('hamburguesa') && (target.includes('hamburguesa') || p.category?.toLowerCase().includes('hamburguesa'))) {
+            return true;
+          }
+          return queryTokens.some((token) => target.includes(token));
+        });
+
+        const results = filtered.length > 0 ? filtered : liveProducts;
         return {
-          found_count: filtered.length,
+          found_count: results.length,
           query: args.query,
-          products: filtered.map((p) => ({
+          products: results.map((p) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -304,7 +316,7 @@ export async function POST(req: NextRequest) {
         result: toolRes,
         durationMs: Date.now() - tStart,
       });
-      const productsList = Array.isArray(toolRes.products) ? toolRes.products : [];
+      const productsList = Array.isArray(toolRes.products) && toolRes.products.length > 0 ? toolRes.products : liveProducts;
       const names = productsList.slice(0, 3).map((p: any) => `${p.name} ($${Number(p.price || 0).toLocaleString('es-CO')})`).join(', ');
       replyText = `¡Hola! Consultando nuestro catálogo en vivo de ${currentBusiness.name}, te recomiendo: ${names}. ¿Te gustaría ordenar alguno?`;
     } else if (queryLower.includes('cita') || queryLower.includes('agenda') || queryLower.includes('hora') || queryLower.includes('doctor')) {

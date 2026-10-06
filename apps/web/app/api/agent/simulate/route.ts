@@ -41,17 +41,36 @@ export async function POST(req: NextRequest) {
     // 1. Fetch live tenant details and products from Supabase
     const supabase = await createClient();
 
-    // Query business profile
-    const { data: businessData } = await supabase
+    // Query business profile: try requested businessId or first available in database
+    let businessData: any = null;
+    let effectiveBusinessId = businessId;
+
+    const { data: requestedBusiness } = await supabase
       .from('businesses')
       .select('id, name, description, timezone, business_hours, location')
       .eq('id', businessId)
       .maybeSingle();
 
+    if (requestedBusiness) {
+      businessData = requestedBusiness;
+      effectiveBusinessId = requestedBusiness.id;
+    } else {
+      const { data: firstBusiness } = await supabase
+        .from('businesses')
+        .select('id, name, description, timezone, business_hours, location')
+        .limit(1)
+        .maybeSingle();
+
+      if (firstBusiness) {
+        businessData = firstBusiness;
+        effectiveBusinessId = firstBusiness.id;
+      }
+    }
+
     const currentBusiness: Business = {
-      id: businessId,
-      name: businessData?.name || 'La Casona Gourmet',
-      description: businessData?.description || 'Restaurante y servicios gastronómicos de alta calidad.',
+      id: effectiveBusinessId,
+      name: businessData?.name || 'Restaurante Gourmet Demo',
+      description: businessData?.description || 'Hamburguesería artesanal y parrilla premium.',
       status: 'active',
       timezone: businessData?.timezone || 'America/Bogota',
       business_hours: businessData?.business_hours || {
@@ -60,14 +79,14 @@ export async function POST(req: NextRequest) {
           monday: { open: '11:00', close: '22:00', closed: false },
           tuesday: { open: '11:00', close: '22:00', closed: false },
           wednesday: { open: '11:00', close: '22:00', closed: false },
-          thursday: { open: '11:00', close: '22:00', closed: false },
+          thursday: { open: '11:00', close: '23:00', closed: false },
           friday: { open: '11:00', close: '23:00', closed: false },
           saturday: { open: '11:00', close: '23:00', closed: false },
           sunday: { open: '12:00', close: '21:00', closed: false },
         },
       },
       location: businessData?.location || {
-        address: 'Calle 85 # 12-44',
+        address: 'Calle 93 # 14-20',
         city: 'Bogotá',
         country: 'Colombia',
       },
@@ -80,14 +99,14 @@ export async function POST(req: NextRequest) {
     const { data: dbProducts } = await supabase
       .from('products')
       .select('id, name, description, price, sku, category, is_active')
-      .eq('business_id', businessId)
+      .eq('business_id', effectiveBusinessId)
       .eq('is_active', true);
 
     const liveProducts = dbProducts && dbProducts.length > 0 ? dbProducts : [
-      { id: 'p1', name: 'Pizza Margarita Clásica', description: 'Masa madre, mozzarella de búfala y albahaca fresca.', price: 28000, category: 'Pizzas', is_active: true },
-      { id: 'p2', name: 'Pizza Pepperoni Supreme', description: 'Doble pepperoni y queso mozzarella artesanal.', price: 32000, category: 'Pizzas', is_active: true },
-      { id: 'p3', name: 'Bowl Mediterráneo Vegano', description: 'Quinoa, garbanzos crocantes y aderezo tahini.', price: 26000, category: 'Bowls', is_active: true },
-      { id: 'p4', name: 'Limonada de Coco Natural', description: 'Coco natural frappé y limón fresco.', price: 9000, category: 'Bebidas', is_active: true },
+      { id: 'p1', name: 'Hamburguesa Clásica Artesanal', description: 'Carne angus 150g, queso cheddar madurado y pan brioche.', price: 24900, category: 'Hamburguesas', is_active: true },
+      { id: 'p2', name: 'Hamburguesa Doble Trufada', description: 'Doble carne angus 300g, doble gouda y mayonesa de trufa.', price: 35900, category: 'Hamburguesas', is_active: true },
+      { id: 'p3', name: 'Papas Rústicas con Romero', description: 'Papas cortadas a mano con alioli de ajo asado.', price: 9900, category: 'Acompañamientos', is_active: true },
+      { id: 'p4', name: 'Limonada de Coco y Menta', description: 'Coco frappé y menta fresca.', price: 8500, category: 'Bebidas', is_active: true },
     ];
 
     // 3. Assemble complete AgentConfig
@@ -123,7 +142,7 @@ export async function POST(req: NextRequest) {
       ],
       model_config: {
         provider: 'gemini',
-        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
         temperature: 0.7,
       },
       out_of_hours_behavior: 'bot_responds',

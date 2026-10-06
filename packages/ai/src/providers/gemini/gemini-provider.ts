@@ -24,13 +24,13 @@ export class GeminiProvider implements AIProvider {
   constructor(options: GeminiProviderOptions = {}) {
     const apiKey = options.apiKey || process.env.GEMINI_API_KEY || '';
     this.client = new GoogleGenAI({ apiKey });
-    this.defaultModel = options.defaultModel || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    this.defaultModel = options.defaultModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
     let model = request.model || this.defaultModel;
-    if (model === 'gemini-2.5-flash' || model === 'models/gemini-2.5-flash') {
-      model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    if (model === 'gemini-2.5-flash' || model === 'models/gemini-2.5-flash' || model === 'gemini-2.0-flash') {
+      model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
     }
 
     // 1. Adapt canonical messages into Gemini turn structure
@@ -62,7 +62,7 @@ export class GeminiProvider implements AIProvider {
     }
 
     // 4. Invoke Gemini API with automatic high-demand fallback and retry
-    const fallbackModels = [model, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const fallbackModels = [model, 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.8-flash'];
     let response: any = null;
     let actualModelUsed = model;
     let lastError: any = null;

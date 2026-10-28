@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     // 2. Query live products from Supabase for this tenant
     const { data: dbProducts } = await supabase
       .from('products')
-      .select('id, name, description, price, sku, category, is_active')
+      .select('id, name, description, price, category, is_active, metadata')
       .eq('business_id', effectiveBusinessId)
       .eq('is_active', true);
 

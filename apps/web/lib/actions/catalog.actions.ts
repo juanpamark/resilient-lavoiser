@@ -81,7 +81,7 @@ export async function getProductsAction(): Promise<ActionResult<CatalogProduct[]
 
     const { data: dbProducts, error } = await supabase
       .from('products')
-      .select('id, name, sku, category, price, description, is_active')
+      .select('id, name, category, price, description, is_active, metadata')
       .eq('business_id', businessId)
       .order('category', { ascending: true })
       .order('name', { ascending: true });
@@ -94,7 +94,7 @@ export async function getProductsAction(): Promise<ActionResult<CatalogProduct[]
     const formatted: CatalogProduct[] = (dbProducts || []).map((p: any) => ({
       id: p.id,
       name: p.name,
-      sku: p.sku || `SKU-${p.id.substring(0, 6).toUpperCase()}`,
+      sku: p.metadata?.sku || p.sku || `SKU-${p.id.substring(0, 6).toUpperCase()}`,
       category: p.category || 'General',
       price: Number(p.price) || 0,
       description: p.description || '',
@@ -132,13 +132,13 @@ export async function createProductAction(input: {
       .insert({
         business_id: businessId,
         name: input.name.trim(),
-        sku,
         category: input.category || 'General',
         price: Number(input.price) || 0,
         description: input.description?.trim() || '',
         is_active: true,
+        metadata: { sku },
       })
-      .select('id, name, sku, category, price, description, is_active')
+      .select('id, name, category, price, description, is_active, metadata')
       .single();
 
     if (error) {
@@ -154,7 +154,7 @@ export async function createProductAction(input: {
       data: {
         id: inserted.id,
         name: inserted.name,
-        sku: inserted.sku,
+        sku: inserted.metadata?.sku || sku,
         category: inserted.category,
         price: Number(inserted.price),
         description: inserted.description,

@@ -52,7 +52,7 @@ export function useRealtimeInbox({
         table: 'messages',
         filter: `business_id=eq.${businessId}`,
       },
-      (payload) => {
+      (payload: any) => {
         const newMsg = payload.new;
         if (newMsg?.role === 'user') {
           playMessageReceivedSound();
@@ -72,7 +72,7 @@ export function useRealtimeInbox({
         table: 'conversations',
         filter: `business_id=eq.${businessId}`,
       },
-      (payload) => {
+      (payload: any) => {
         const updated = payload.new;
         if (updated?.status === 'waiting_for_human') {
           playHandoffAlertSound();
@@ -100,15 +100,15 @@ export function useRealtimeInbox({
         }
         setActiveOperators(operators);
       })
-      .on('presence', { event: 'join' }, ({ key }) => {
+      .on('presence', { event: 'join' }, ({ key }: any) => {
         console.log(`[Presence] Asesor conectado: ${key}`);
       })
-      .on('presence', { event: 'leave' }, ({ key }) => {
+      .on('presence', { event: 'leave' }, ({ key }: any) => {
         console.log(`[Presence] Asesor desconectado: ${key}`);
       });
 
     // Subscribe to channel
-    channel.subscribe((status) => {
+    channel.subscribe((status: any) => {
       if (status === 'SUBSCRIBED') {
         setConnectionStatus('connected');
         channel.track({

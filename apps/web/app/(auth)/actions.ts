@@ -15,7 +15,7 @@ export async function login(formData: FormData) {
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await (supabase.auth as any).signInWithPassword({
     email,
     password,
   });
@@ -77,6 +77,6 @@ export async function login(formData: FormData) {
 
 export async function logout() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await (supabase.auth as any).signOut();
   redirect('/login');
 }

@@ -42,7 +42,7 @@ export default function BusinessDashboardPage() {
     {
       title: 'Estado del Agente',
       value: 'Activo',
-      subtext: 'Gemini 2.5 Flash en línea',
+      subtext: 'Gemini 3.5 Flash en línea',
       icon: Bot,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
@@ -54,7 +54,7 @@ export default function BusinessDashboardPage() {
       id: 'conv_1',
       customerName: 'Santiago Gómez',
       phone: '+57 310 555 6677',
-      lastMessage: '¿Qué pizzas tienen disponibles?',
+      lastMessage: '¿Qué cortes de carne a la brasa me recomiendan?',
       status: 'active' as const,
       statusLabel: 'IA Atendiendo',
       time: 'Hace 4 min',
@@ -63,7 +63,7 @@ export default function BusinessDashboardPage() {
       id: 'conv_2',
       customerName: 'Mariana Duarte',
       phone: '+57 301 222 3344',
-      lastMessage: 'Necesito cancelar mi pedido de las 7pm por favor',
+      lastMessage: 'Quisiera reservar una mesa para 6 personas este domingo',
       status: 'waiting_for_human' as const,
       statusLabel: 'Esperando Asesor',
       time: 'Hace 8 min',
@@ -72,7 +72,7 @@ export default function BusinessDashboardPage() {
       id: 'conv_3',
       customerName: 'Carlos Ruiz',
       phone: '+57 320 888 9900',
-      lastMessage: 'Perfecto, ya te transfiero el valor a Nequi',
+      lastMessage: 'Perfecto, ya te transfiero el valor a Nequi por la parrillada',
       status: 'human_active' as const,
       statusLabel: 'Asesor en Control',
       time: 'Hace 15 min',
@@ -85,7 +85,7 @@ export default function BusinessDashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Panel de Operaciones — La Casona Gourmet
+            Panel de Operaciones — Restaurante Santa Cruz
           </h2>
           <p className="text-sm text-slate-500 mt-1">
             Monitorea en tiempo real las conversaciones con tus clientes y la actividad del Agente de IA.

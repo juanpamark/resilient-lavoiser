@@ -1,80 +1,116 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UtensilsCrossed,
   Plus,
   Search,
-  Edit2,
   Trash2,
   CheckCircle,
   XCircle,
   AlertTriangle,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { deleteProductAction } from '@/lib/actions/catalog.actions';
+import {
+  getProductsAction,
+  createProductAction,
+  deleteProductAction,
+  toggleProductAvailabilityAction,
+  type CatalogProduct,
+} from '@/lib/actions/catalog.actions';
 
-interface ProductItem {
-  id: string;
-  name: string;
-  sku: string;
-  category: string;
-  price: number;
-  description: string;
-  isAvailable: boolean;
-}
-
-const initialProducts: ProductItem[] = [
+const initialSantaCruzProducts: CatalogProduct[] = [
   {
-    id: 'prod_1',
-    name: 'Pizza Margarita Clásica',
-    sku: 'PIZ-MAR-01',
-    category: 'Pizzas Artesanales',
-    price: 28000,
-    description: 'Masa madre, salsa pomodoro italiana, mozzarella de búfala fresca y albahaca.',
+    id: 'p1',
+    name: 'Parrillada Especial Santa Cruz',
+    sku: 'CAR-PAR-01',
+    category: 'Parrilla & Carnes',
+    price: 75000,
+    description: 'Punta de anca, pechuga a la brasa, costilla, chorizo artesanal, arepa de choclo y papas criollas con chimichurri casero.',
     isAvailable: true,
   },
   {
-    id: 'prod_2',
-    name: 'Pizza Pepperoni Supreme',
-    sku: 'PIZ-PEP-02',
-    category: 'Pizzas Artesanales',
-    price: 32000,
-    description: 'Doble porción de pepperoni curado, queso mozzarella y orégano fresco.',
+    id: 'p2',
+    name: 'Churrasco a la Brasa 350g',
+    sku: 'CAR-CHU-02',
+    category: 'Parrilla & Carnes',
+    price: 42000,
+    description: 'Corte tierno de chatas maduradas al carbón, servido con yuca al vapor, ensalada fresca campesina y chimichurri.',
     isAvailable: true,
   },
   {
-    id: 'prod_3',
-    name: 'Bowl Mediterráneo Vegano',
-    sku: 'BWL-MED-03',
-    category: 'Ensaladas & Bowls',
-    price: 26000,
-    description: 'Quinoa, garbanzos crocantes, aguacate, tomates cherry y aderezo tahini.',
+    id: 'p3',
+    name: 'Bandeja Típica Santa Cruz',
+    sku: 'TIP-BAN-03',
+    category: 'Platos Típicos',
+    price: 36000,
+    description: 'Fríjoles campesinos, arroz, carne molida en paila, chicharrón crocante carnudo, huevo frito, tajada de maduro y aguacate.',
     isAvailable: true,
   },
   {
-    id: 'prod_4',
-    name: 'Limonada de Coco Natural',
-    sku: 'BEB-LIM-04',
+    id: 'p4',
+    name: 'Costillas BBQ Ahumadas',
+    sku: 'CAR-COS-04',
+    category: 'Parrilla & Carnes',
+    price: 38500,
+    description: '500g de costillas tiernas bañadas en salsa BBQ artesanal con panela y especias, con papas a la francesa.',
+    isAvailable: true,
+  },
+  {
+    id: 'p5',
+    name: 'Cazuela de Mariscos Tradicional',
+    sku: 'PES-CAZ-05',
+    category: 'Pescados & Mariscos',
+    price: 48000,
+    description: 'Camarones, calamares y filete de pescado en crema de coco y cilantro fresco, servida con arroz de coco y patacones.',
+    isAvailable: true,
+  },
+  {
+    id: 'p6',
+    name: 'Picada Campesina Familiar (4 personas)',
+    sku: 'COM-PIC-06',
+    category: 'Para Compartir',
+    price: 95000,
+    description: 'Lomo de cerdo, carne de res, chicharrón, morcilla, plátano maduro con queso, arepitas y ají casero.',
+    isAvailable: true,
+  },
+  {
+    id: 'p7',
+    name: 'Jugo Natural en Fruta Fresca',
+    sku: 'BEB-JUG-07',
     category: 'Bebidas',
-    price: 9000,
-    description: 'Leche de coco cremosa, jugo de limón fresco y hielo frappé.',
-    isAvailable: false,
+    price: 7500,
+    description: 'Fruta 100% natural (Mango, Maracuyá, Lulo, Mora o Guanábana), en agua o leche.',
+    isAvailable: true,
+  },
+  {
+    id: 'p8',
+    name: 'Limonada de Coco Frappé',
+    sku: 'BEB-LIM-08',
+    category: 'Bebidas',
+    price: 9500,
+    description: 'Cremosa leche de coco de la costa con limón fresco, hierbabuena y hielo frappé.',
+    isAvailable: true,
   },
 ];
 
 export default function BusinessCatalogPage() {
-  const [products, setProducts] = useState<ProductItem[]>(initialProducts);
+  const [products, setProducts] = useState<CatalogProduct[]>(initialSantaCruzProducts);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<ProductItem | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<CatalogProduct | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [newProduct, setNewProduct] = useState({
     name: '',
     sku: '',
-    category: 'Pizzas Artesanales',
+    category: 'Parrilla & Carnes',
     price: '',
     description: '',
   });
@@ -84,12 +120,52 @@ export default function BusinessCatalogPage() {
     setTimeout(() => setNotification(null), 3500);
   };
 
-  const toggleAvailability = (id: string) => {
-    setProducts(
-      products.map((p) =>
-        p.id === id ? { ...p, isAvailable: !p.isAvailable } : p
-      )
+  // Fetch real products from Supabase
+  const loadProducts = async () => {
+    setIsLoading(true);
+    try {
+      const res = await getProductsAction();
+      if (res.success && res.data && res.data.length > 0) {
+        setProducts(res.data);
+      } else {
+        setProducts(initialSantaCruzProducts);
+      }
+    } catch {
+      setProducts(initialSantaCruzProducts);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const toggleAvailability = async (id: string) => {
+    const target = products.find((p) => p.id === id);
+    if (!target) return;
+
+    const newStatus = !target.isAvailable;
+    // Optimistic UI update
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isAvailable: newStatus } : p))
     );
+
+    try {
+      const res = await toggleProductAvailabilityAction(id, newStatus);
+      if (!res.success) {
+        showNotification(res.error || 'Error al actualizar disponibilidad', 'error');
+        // Rollback
+        setProducts((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, isAvailable: !newStatus } : p))
+        );
+      }
+    } catch {
+      // Rollback on network failure
+      setProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, isAvailable: !newStatus } : p))
+      );
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -99,58 +175,100 @@ export default function BusinessCatalogPage() {
     try {
       const res = await deleteProductAction(productToDelete.id);
       if (res.success) {
-        setProducts(products.filter((p) => p.id !== productToDelete.id));
-        showNotification(`Producto "${productToDelete.name}" eliminado exitosamente del catálogo y de agilizio.`);
+        setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
+        showNotification(`Plato "${productToDelete.name}" eliminado del catálogo.`);
       } else {
-        showNotification(res.error || 'Error al eliminar el producto', 'error');
+        showNotification(res.error || 'Error al eliminar el plato', 'error');
       }
     } catch {
-      showNotification('Error de conexión al eliminar el producto', 'error');
+      showNotification('Error de conexión al eliminar', 'error');
     } finally {
       setIsDeleting(false);
       setProductToDelete(null);
     }
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProduct.name || !newProduct.price) return;
+    if (!newProduct.name.trim() || !newProduct.price) return;
 
-    const item: ProductItem = {
-      id: `prod_${Date.now()}`,
-      name: newProduct.name,
-      sku: newProduct.sku || `SKU-${Date.now().toString().slice(-4)}`,
-      category: newProduct.category,
-      price: Number(newProduct.price),
-      description: newProduct.description,
-      isAvailable: true,
-    };
+    setIsSubmitting(true);
+    try {
+      const res = await createProductAction({
+        name: newProduct.name.trim(),
+        sku: newProduct.sku.trim(),
+        category: newProduct.category,
+        price: Number(newProduct.price),
+        description: newProduct.description.trim(),
+      });
 
-    setProducts([...products, item]);
-    setIsModalOpen(false);
-    setNewProduct({ name: '', sku: '', category: 'Pizzas Artesanales', price: '', description: '' });
+      if (res.success && res.data) {
+        setProducts((prev) => [res.data!, ...prev]);
+        showNotification(`"${newProduct.name}" agregado exitosamente al catálogo.`);
+        setIsModalOpen(false);
+        setNewProduct({
+          name: '',
+          sku: '',
+          category: 'Parrilla & Carnes',
+          price: '',
+          description: '',
+        });
+      } else {
+        showNotification(res.error || 'No se pudo crear el producto', 'error');
+      }
+    } catch {
+      showNotification('Error de conexión al registrar producto', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const filteredProducts = products.filter((p) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Menú y Catálogo de Productos
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Menú y Catálogo — Restaurante Santa Cruz
+            </h2>
+            <Badge variant="purple">Catálogo en Vivo</Badge>
+          </div>
           <p className="text-sm text-slate-500 mt-1">
-            Los productos y precios registrados aquí son consultados en tiempo real por el Agente de IA.
+            Los platos, precios y disponibilidad registrados aquí son consultados en tiempo real por agilizio en WhatsApp y en el simulador.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo Producto
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadProducts}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            title="Recargar catálogo de base de datos"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            Sincronizar
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Plato / Producto
+          </button>
+        </div>
       </div>
 
       {notification && (
@@ -182,13 +300,15 @@ export default function BusinessCatalogPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between w-full">
-            <CardTitle>Artículos del Menú ({products.length})</CardTitle>
-            <div className="relative w-64">
+            <CardTitle>Artículos del Menú ({filteredProducts.length})</CardTitle>
+            <div className="relative w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Buscar artículo..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por plato, ingrediente o SKU..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -197,7 +317,7 @@ export default function BusinessCatalogPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100 text-xs uppercase">
               <tr>
-                <th className="px-6 py-3.5">Producto</th>
+                <th className="px-6 py-3.5">Plato / Producto</th>
                 <th className="px-6 py-3.5">Categoría</th>
                 <th className="px-6 py-3.5">SKU</th>
                 <th className="px-6 py-3.5">Precio (COP)</th>
@@ -206,7 +326,7 @@ export default function BusinessCatalogPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {products.map((prod) => (
+              {filteredProducts.map((prod) => (
                 <tr key={prod.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-semibold text-slate-900">{prod.name}</div>
@@ -217,7 +337,7 @@ export default function BusinessCatalogPage() {
                   </td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">{prod.sku}</td>
                   <td className="px-6 py-4 font-semibold text-slate-900">
-                    ${prod.price.toLocaleString('es-CO')}
+                    ${Number(prod.price || 0).toLocaleString('es-CO')}
                   </td>
                   <td className="px-6 py-4">
                     <button
@@ -263,22 +383,22 @@ export default function BusinessCatalogPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <h3 className="font-bold text-slate-900 text-lg mb-1">Agregar Nuevo Producto</h3>
+            <h3 className="font-bold text-slate-900 text-lg mb-1">Agregar Plato a la Carta</h3>
             <p className="text-xs text-slate-500 mb-5">
-              Ingresa los datos para que el Agente de IA pueda ofrecer este plato a los clientes.
+              Al guardar, agilizio consultará de inmediato este plato en el simulador y por WhatsApp.
             </p>
 
             <form onSubmit={handleAddProduct} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nombre del Plato / Producto
+                  Nombre del Plato / Bebida
                 </label>
                 <input
                   type="text"
                   required
                   value={newProduct.name}
                   onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                  placeholder="Ej: Pasta Carbonara Artesanal"
+                  placeholder="Ej: Lomo al Trapo Santa Cruz"
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -293,23 +413,41 @@ export default function BusinessCatalogPage() {
                     required
                     value={newProduct.price}
                     onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                    placeholder="25000"
+                    placeholder="45000"
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    SKU (Opcional)
+                    Categoría
                   </label>
-                  <input
-                    type="text"
-                    value={newProduct.sku}
-                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                    placeholder="PAS-CARB-05"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <select
+                    value={newProduct.category}
+                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="Parrilla & Carnes">Parrilla & Carnes</option>
+                    <option value="Platos Típicos">Platos Típicos</option>
+                    <option value="Pescados & Mariscos">Pescados & Mariscos</option>
+                    <option value="Para Compartir">Para Compartir</option>
+                    <option value="Bebidas">Bebidas</option>
+                    <option value="Postres">Postres</option>
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  SKU (Código Interno)
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.sku}
+                  onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
+                  placeholder="CAR-LOM-09"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
@@ -320,7 +458,7 @@ export default function BusinessCatalogPage() {
                   rows={2}
                   value={newProduct.description}
                   onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                  placeholder="Menciona ingredientes clave para que la IA responda preguntas de alérgenos..."
+                  placeholder="Detalla guarniciones, términos de carne y alérgenos..."
                   className="w-full p-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -328,6 +466,7 @@ export default function BusinessCatalogPage() {
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
                 >
@@ -335,9 +474,16 @@ export default function BusinessCatalogPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm disabled:opacity-50"
                 >
-                  Crear Producto
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando...
+                    </>
+                  ) : (
+                    'Guardar Plato'
+                  )}
                 </button>
               </div>
             </form>
@@ -354,15 +500,15 @@ export default function BusinessCatalogPage() {
             </div>
 
             <h3 className="font-bold text-slate-900 text-lg mb-2">
-              ¿Eliminar producto del catálogo?
+              ¿Eliminar plato del menú?
             </h3>
             
             <p className="text-sm text-slate-600 leading-relaxed mb-4">
-              Estás a punto de eliminar permanentemente <span className="font-semibold text-slate-900">&quot;{productToDelete.name}&quot;</span> ({productToDelete.sku}).
+              Estás a punto de eliminar <span className="font-semibold text-slate-900">&quot;{productToDelete.name}&quot;</span> ({productToDelete.sku}).
             </p>
 
             <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs mb-6">
-              ⚠️ <strong>Impacto en agilizio:</strong> El agente de IA dejará de recomendar u ofrecer este plato inmediatamente en las conversaciones activas de WhatsApp.
+              ⚠️ <strong>Impacto en agilizio:</strong> El agente dejará de ofrecer este plato de inmediato en WhatsApp y en el simulador.
             </div>
 
             <div className="flex items-center justify-end gap-3">
@@ -388,7 +534,7 @@ export default function BusinessCatalogPage() {
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    Sí, Eliminar Producto
+                    Sí, Eliminar
                   </>
                 )}
               </button>

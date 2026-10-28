@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot,
   Save,
@@ -21,10 +21,12 @@ import {
   MessageSquare,
   Clock,
   Sparkle,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { IndustryType } from '@platform/core';
+import { getAgentConfigAction, saveAgentConfigAction } from '@/lib/actions/agent.actions';
 
 interface IndustryPreset {
   id: IndustryType;
@@ -44,9 +46,9 @@ const industryPresets: Record<IndustryType, IndustryPreset> = {
     id: 'food_and_beverage',
     name: 'Gastronomía & Restaurantes',
     icon: Utensils,
-    tone: 'amable, cálido y cercano',
+    tone: 'amable, cálido, anfitrión y profesional',
     systemInstructions:
-      'Eres "agilizio", el asistente virtual oficial de este restaurante por WhatsApp. Tu objetivo es asesorar a los comensales, detallar platos e ingredientes, gestionar pedidos con precisión matemática y derivar a un asesor humano ante dudas complejas o quejas.',
+      'Eres "agilizio", el asistente virtual y anfitrión oficial de Restaurante Santa Cruz por WhatsApp. Tu misión es brindar una cálida bienvenida a los comensales, detallar los platos de nuestra parrilla campesina, cortes madurados a la brasa y comida típica colombiana, gestionar reservas de mesas para eventos familiares o fines de semana, tomar pedidos a domicilio con exactitud matemática y responder con orgullo sobre nuestra sazón campestre.',
     recommendedTools: [
       'search_products',
       'get_product_details',
@@ -57,29 +59,33 @@ const industryPresets: Record<IndustryType, IndustryPreset> = {
     ],
     faqs: [
       {
-        q: '¿Tienen servicio de domicilio propio o por aplicaciones?',
-        a: 'Tenemos domiciliarios propios con entrega en 35 a 45 minutos. El costo varía entre $4,000 y $7,000 según la zona de cobertura.',
+        q: '¿Cómo puedo reservar una mesa para el fin de semana o un evento familiar?',
+        a: '¡Con gusto agendamos tu reserva! Indícanos la fecha, hora de llegada y cuántas personas te acompañarán. Para grupos de más de 8 personas te recomendamos reservar con al menos 24 horas de antelación.',
       },
       {
-        q: '¿Qué medios de pago aceptan?',
-        a: 'Aceptamos transferencias Nequi, Daviplata, Bancolombia y datáfono para pago contraentrega con tarjeta.',
+        q: '¿Tienen servicio a domicilio y en qué horarios?',
+        a: 'Sí, despachamos domicilios todos los días de 11:30 AM a 8:30 PM. El tiempo promedio de entrega es de 35 a 45 minutos.',
       },
       {
-        q: '¿Tienen opciones vegetarianas o veganas?',
-        a: 'Sí, contamos con opciones vegetarianas en platos principales y bowls saludables.',
+        q: '¿Qué medios de pago reciben?',
+        a: 'Aceptamos transferencias por Nequi, Daviplata, Bancolombia, pago contraentrega en efectivo y datáfono para tarjetas débito o crédito.',
+      },
+      {
+        q: '¿Tienen parqueadero y zona campestre o para niños?',
+        a: 'Sí, contamos con amplio parqueadero privado y vigilado sin costo para nuestros comensales, amplias áreas verdes y juegos infantiles.',
       },
     ],
     fewShots: [
       {
-        user: '¿Qué tienen para almorzar rápido hoy?',
+        user: '¿Qué me recomiendan de carnes a la brasa para hoy?',
         assistant:
-          '¡Hola! Te recomiendo nuestro Combo Gourmet con hamburguesa artesanal en pan brioche o el Bowl Mediterráneo, ambos listos para despacho en 25 minutos. ¿Deseas ver las bebidas disponibles?',
+          '¡Hola! Te recomiendo especialmente nuestra Parrillada Especial Santa Cruz con corte de punta de anca, costillitas y chorizo artesanal, o nuestro tierno Churrasco a la Brasa de 350g con chimichurri casero. ¿Te gustaría ordenar o prefieres ver la carta completa?',
       },
     ],
     returnPolicy:
-      'Si el pedido llega en mal estado o incompleto, el cliente debe enviar una foto por este chat en los primeros 30 minutos tras la entrega para reposición inmediata sin costo.',
+      'En domicilios garantizamos la calidad y temperatura de nuestros platos. Ante cualquier inconveniente en la entrega, ofrecemos reposición inmediata sin costo.',
     cancellationPolicy:
-      'Las cancelaciones solo se permiten en los primeros 10 minutos posteriores a la confirmación de la orden antes de que ingrese a cocina.',
+      'Para reservas de mesa, puedes reagendar o cancelar sin costo hasta 2 horas antes de la hora acordada.',
   },
   health_and_wellness: {
     id: 'health_and_wellness',
@@ -253,14 +259,50 @@ export default function BusinessAgentPage() {
     get_product_details: true,
     calculate_order: true,
     create_order: true,
-    check_availability: false,
-    book_appointment: false,
+    check_availability: true,
+    book_appointment: true,
     transfer_to_human: true,
     get_business_information: true,
   });
 
+  const [businessName, setBusinessName] = useState('Restaurante Santa Cruz');
   const [savedNotification, setSavedNotification] = useState(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+
+  // Load configuration from Supabase on mount
+  useEffect(() => {
+    async function loadConfig() {
+      setIsLoadingConfig(true);
+      try {
+        const res = await getAgentConfigAction();
+        if (res.success && res.data) {
+          setBusinessName(res.data.businessName || 'Restaurante Santa Cruz');
+          const cfg = res.data.config;
+          if (cfg.systemInstructions) setSystemInstructions(cfg.systemInstructions);
+          if (cfg.tone) setTone(cfg.tone);
+          if (cfg.language) setLanguage(cfg.language);
+          if (cfg.faqs && cfg.faqs.length > 0) setFaqs(cfg.faqs);
+          if (cfg.fewShots && cfg.fewShots.length > 0) setFewShots(cfg.fewShots);
+          if (cfg.returnPolicy) setReturnPolicy(cfg.returnPolicy);
+          if (cfg.cancellationPolicy) setCancellationPolicy(cfg.cancellationPolicy);
+          if (cfg.enabledTools && cfg.enabledTools.length > 0) {
+            const toolMap: Record<string, boolean> = {};
+            initialToolsList.forEach((t) => {
+              toolMap[t.id] = cfg.enabledTools.includes(t.id);
+            });
+            setEnabledTools(toolMap);
+          }
+        }
+      } catch (err) {
+        console.error('Error cargando configuración:', err);
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    }
+    loadConfig();
+  }, []);
 
   // Simulator Chat State
   const [simMessages, setSimMessages] = useState<
@@ -275,7 +317,7 @@ export default function BusinessAgentPage() {
       id: 'welcome',
       role: 'assistant',
       content:
-        '¡Hola! Soy agilizio, tu agente de inteligencia artificial. Puedes interactuar conmigo en este simulador para probar en tiempo real las respuestas, el tono y la ejecución de herramientas configuradas para tu industria.',
+        '¡Hola! Soy agilizio, el anfitrión y asistente virtual de Restaurante Santa Cruz. Puedes interactuar conmigo en este simulador para probar en vivo la recomendación de platos de nuestra carta a la brasa, reservas de mesas y pedidos.',
     },
   ]);
   const [simInput, setSimInput] = useState('');
@@ -341,10 +383,37 @@ export default function BusinessAgentPage() {
     }));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedNotification(true);
-    setTimeout(() => setSavedNotification(false), 3500);
+    setIsSaving(true);
+    try {
+      const activeTools = Object.entries(enabledTools)
+        .filter(([_, enabled]) => enabled)
+        .map(([id]) => id);
+
+      const res = await saveAgentConfigAction({
+        selectedIndustry,
+        tone,
+        language,
+        systemInstructions,
+        faqs,
+        fewShots,
+        returnPolicy,
+        cancellationPolicy,
+        enabledTools: activeTools,
+      });
+
+      if (res.success) {
+        setSavedNotification(true);
+        setTimeout(() => setSavedNotification(false), 4500);
+      } else {
+        alert(`Error al guardar configuración: ${res.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error de conexión: ${err.message}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Simulator Message Handler (Connected to Live Gemini & Supabase API)
@@ -433,13 +502,13 @@ export default function BusinessAgentPage() {
           <div className="flex items-center gap-2.5">
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <Bot className="w-7 h-7 text-blue-600" />
-              agilizio Studio
+              agilizio Studio — {businessName}
             </h2>
             <Badge variant="purple">Motor agilizio v1.0</Badge>
-            <Badge variant="default">Gemini Flash Latest</Badge>
+            <Badge variant="default">Gemini 3.5 Flash</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Configura el cerebro conversacional de tu negocio con soporte multi-industria, calibración de prompts y herramientas deterministas.
+            Configura el cerebro conversacional de {businessName}: calibración de tono, respuestas a preguntas frecuentes y herramientas activas en WhatsApp.
           </p>
         </div>
 
@@ -455,10 +524,18 @@ export default function BusinessAgentPage() {
 
           <button
             onClick={handleSave}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors"
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
-            Guardar Cambios
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Guardando...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" /> Guardar Cambios
+              </>
+            )}
           </button>
         </div>
       </div>

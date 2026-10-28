@@ -69,25 +69,25 @@ export async function POST(req: NextRequest) {
 
     const currentBusiness: Business = {
       id: effectiveBusinessId,
-      name: businessData?.name || 'Restaurante Gourmet Demo',
-      description: businessData?.description || 'Hamburguesería artesanal y parrilla premium.',
+      name: businessData?.name || 'Restaurante Santa Cruz',
+      description: businessData?.description || 'Especialistas en carnes a la brasa, cortes madurados, gastronomía típica y eventos familiares.',
       status: 'active',
       timezone: businessData?.timezone || 'America/Bogota',
       business_hours: businessData?.business_hours || {
         timezone: 'America/Bogota',
         days: {
-          monday: { open: '11:00', close: '22:00', closed: false },
-          tuesday: { open: '11:00', close: '22:00', closed: false },
-          wednesday: { open: '11:00', close: '22:00', closed: false },
-          thursday: { open: '11:00', close: '23:00', closed: false },
-          friday: { open: '11:00', close: '23:00', closed: false },
-          saturday: { open: '11:00', close: '23:00', closed: false },
-          sunday: { open: '12:00', close: '21:00', closed: false },
+          monday: { open: '11:30', close: '20:30', closed: false },
+          tuesday: { open: '11:30', close: '20:30', closed: false },
+          wednesday: { open: '11:30', close: '20:30', closed: false },
+          thursday: { open: '11:30', close: '21:00', closed: false },
+          friday: { open: '11:30', close: '22:00', closed: false },
+          saturday: { open: '11:00', close: '22:00', closed: false },
+          sunday: { open: '11:00', close: '20:30', closed: false },
         },
       },
       location: businessData?.location || {
-        address: 'Calle 93 # 14-20',
-        city: 'Bogotá',
+        address: 'Sede Campestre Km 4 Vía Principal',
+        city: 'Santa Cruz',
         country: 'Colombia',
       },
       settings: {},
@@ -103,10 +103,14 @@ export async function POST(req: NextRequest) {
       .eq('is_active', true);
 
     const liveProducts = dbProducts && dbProducts.length > 0 ? dbProducts : [
-      { id: 'p1', name: 'Hamburguesa Clásica Artesanal', description: 'Carne angus 150g, queso cheddar madurado y pan brioche.', price: 24900, category: 'Hamburguesas', is_active: true },
-      { id: 'p2', name: 'Hamburguesa Doble Trufada', description: 'Doble carne angus 300g, doble gouda y mayonesa de trufa.', price: 35900, category: 'Hamburguesas', is_active: true },
-      { id: 'p3', name: 'Papas Rústicas con Romero', description: 'Papas cortadas a mano con alioli de ajo asado.', price: 9900, category: 'Acompañamientos', is_active: true },
-      { id: 'p4', name: 'Limonada de Coco y Menta', description: 'Coco frappé y menta fresca.', price: 8500, category: 'Bebidas', is_active: true },
+      { id: 'p1', name: 'Parrillada Especial Santa Cruz', description: 'Punta de anca, pechuga a la brasa, costilla, chorizo artesanal, arepa de choclo y papas criollas.', price: 75000, category: 'Parrilla & Carnes', is_active: true },
+      { id: 'p2', name: 'Churrasco a la Brasa 350g', description: 'Corte tierno de chatas maduradas al carbón con yuca y chimichurri casero.', price: 42000, category: 'Parrilla & Carnes', is_active: true },
+      { id: 'p3', name: 'Bandeja Típica Santa Cruz', description: 'Fríjoles campesinos, arroz, carne molida en paila, chicharrón crocante carnudo, huevo frito y aguacate.', price: 36000, category: 'Platos Típicos', is_active: true },
+      { id: 'p4', name: 'Costillas BBQ Ahumadas', description: '500g de costillas tiernas bañadas en salsa BBQ artesanal con panela.', price: 38500, category: 'Parrilla & Carnes', is_active: true },
+      { id: 'p5', name: 'Cazuela de Mariscos Tradicional', description: 'Camarones, calamares y filete en crema de coco y cilantro con arroz de coco.', price: 48000, category: 'Pescados & Mariscos', is_active: true },
+      { id: 'p6', name: 'Picada Campesina Familiar', description: 'Lomo de cerdo, carne de res, chicharrón, morcilla, plátano maduro con queso y arepitas.', price: 95000, category: 'Para Compartir', is_active: true },
+      { id: 'p7', name: 'Jugo Natural en Fruta Fresca', description: 'Fruta 100% natural (Mango, Maracuyá, Lulo o Mora) en agua o leche.', price: 7500, category: 'Bebidas', is_active: true },
+      { id: 'p8', name: 'Limonada de Coco Frappé', description: 'Leche de coco cremosa, jugo de limón fresco y menta.', price: 9500, category: 'Bebidas', is_active: true },
     ];
 
     // 3. Assemble complete AgentConfig
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest) {
       industry: selectedIndustry,
       system_instructions:
         agentConfig?.system_instructions ||
-        'Eres "agilizio", el asistente virtual inteligente oficial de este negocio. Atiende con agilidad, calidez y precisión comercial.',
+        'Eres "agilizio", el anfitrión y asistente virtual oficial de Restaurante Santa Cruz. Atiende con la máxima calidez, detalle de platos a la brasa, reservas y precios exactos.',
       personality: {
         tone: agentConfig?.personality?.tone || 'amable y profesional',
         language: agentConfig?.personality?.language || 'es-CO',
@@ -170,12 +174,9 @@ export async function POST(req: NextRequest) {
           .map((t) => t.trim())
           .filter((w) => w.length > 2);
 
-        const filtered = liveProducts.filter((p) => {
+        const filtered = liveProducts.filter((p: any) => {
           if (!query || queryTokens.length === 0) return true;
           const target = `${p.name} ${p.description || ''} ${p.category || ''}`.toLowerCase();
-          if (query.includes('hamburguesa') && (target.includes('hamburguesa') || p.category?.toLowerCase().includes('hamburguesa'))) {
-            return true;
-          }
           return queryTokens.some((token) => target.includes(token));
         });
 
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest) {
         return {
           found_count: results.length,
           query: args.query,
-          products: results.map((p) => ({
+          products: results.map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -307,7 +308,21 @@ export async function POST(req: NextRequest) {
     let executedToolsAudit: Array<{ name: string; args: Record<string, unknown>; result: Record<string, unknown>; durationMs: number }> = [];
     let replyText = '';
 
-    if (queryLower.includes('menu') || queryLower.includes('plato') || queryLower.includes('carta') || queryLower.includes('producto') || queryLower.includes('pizza') || queryLower.includes('tienen')) {
+    if (
+      queryLower.includes('menu') ||
+      queryLower.includes('plato') ||
+      queryLower.includes('carta') ||
+      queryLower.includes('producto') ||
+      queryLower.includes('carne') ||
+      queryLower.includes('parrilla') ||
+      queryLower.includes('churrasco') ||
+      queryLower.includes('bandeja') ||
+      queryLower.includes('almorzar') ||
+      queryLower.includes('cenar') ||
+      queryLower.includes('comida') ||
+      queryLower.includes('hamburguesa') ||
+      queryLower.includes('tienen')
+    ) {
       const tStart = Date.now();
       const toolRes = await toolExecutor('search_products', { query: queryLower.replace(/[^a-záéíóú]/gi, ' ') }, { businessId, conversationId: 'conv_sim' });
       executedToolsAudit.push({

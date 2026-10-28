@@ -32,12 +32,12 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: Use getUser() instead of getSession() as recommended by Supabase Auth security guidelines
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await (supabase.auth as any).getUser();
 
   // If user is authenticated, inspect access token payload to read custom claims
   let claims: CustomJwtPayload | null = null;
   if (user) {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await (supabase.auth as any).getSession();
     if (sessionData.session?.access_token) {
       try {
         const payloadBase64 = sessionData.session.access_token.split('.')[1];

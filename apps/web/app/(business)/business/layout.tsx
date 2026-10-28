@@ -27,9 +27,9 @@ export default function BusinessLayout({
           </div>
           <div className="truncate">
             <h1 className="font-bold text-slate-900 text-sm tracking-tight truncate">
-              La Casona Gourmet
+              Restaurante Santa Cruz
             </h1>
-            <p className="text-[11px] text-blue-600 font-semibold flex items-center gap-1">
+            <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
               agilizio Business
             </p>
           </div>
@@ -95,8 +95,8 @@ export default function BusinessLayout({
         <div className="p-4 border-t border-slate-100">
           <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 mb-3">
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-800">Operador Activo</p>
-              <p className="text-[11px] text-slate-500 truncate">operador@lacasona.com</p>
+              <p className="text-xs font-semibold text-slate-800">Administrador</p>
+              <p className="text-[11px] text-slate-500 truncate">admin@agilizio.com</p>
             </div>
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
           </div>

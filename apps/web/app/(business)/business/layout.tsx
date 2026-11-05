@@ -10,6 +10,7 @@ import {
   BarChart3,
   LogOut,
   Store,
+  Star,
 } from 'lucide-react';
 
 export default function BusinessLayout({
@@ -75,6 +76,18 @@ export default function BusinessLayout({
           >
             <ShoppingBag className="w-4 h-4 text-slate-500" />
             Pedidos
+          </Link>
+          <Link
+            href="/business/reviews"
+            className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+              Reseñas Google
+            </div>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              4.8 ★
+            </span>
           </Link>
           <Link
             href="/business/channels"

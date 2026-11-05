@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   MessageSquare,
   Search,
@@ -14,136 +14,51 @@ import {
   Wifi,
   Users,
   BellRing,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useRealtimeInbox } from '@/lib/realtime/use-realtime-inbox';
 import {
+  getInboxConversationsAction,
   sendHumanMessageAction,
   claimConversationAction,
   releaseToBotAction,
   closeConversationAction,
+  type InboxConversation,
+  type InboxMessage,
 } from '@/lib/actions/chat.actions';
 import { playHandoffAlertSound } from '@/lib/realtime/sound-alerts';
 
-interface ChatItem {
-  id: string;
-  customerName: string;
-  phone: string;
-  status: 'active' | 'waiting_for_human' | 'human_active' | 'closed';
-  lastMessage: string;
-  time: string;
-  messages: Array<{
-    id: string;
-    role: 'user' | 'assistant' | 'human_agent';
-    content: string;
-    time: string;
-  }>;
-}
-
-const initialChats: ChatItem[] = [
-  {
-    id: 'conv_1',
-    customerName: 'Santiago Gómez',
-    phone: '+57 310 555 6677',
-    status: 'active',
-    lastMessage: '¿Tienen opción de pizza personal?',
-    time: '19:42',
-    messages: [
-      {
-        id: 'm1',
-        role: 'user',
-        content: 'Buenas noches, ¿qué pizzas tienen disponibles?',
-        time: '19:40',
-      },
-      {
-        id: 'm2',
-        role: 'assistant',
-        content:
-          '¡Hola Santiago! Tenemos Pizza Margarita ($28,000) y Pizza Pepperoni ($32,000). ¿Te gustaría ordenar alguna?',
-        time: '19:40',
-      },
-      {
-        id: 'm3',
-        role: 'user',
-        content: '¿Tienen opción de pizza personal?',
-        time: '19:42',
-      },
-    ],
-  },
-  {
-    id: 'conv_2',
-    customerName: 'Mariana Duarte',
-    phone: '+57 301 222 3344',
-    status: 'waiting_for_human',
-    lastMessage: 'Por favor necesito hablar con un asesor para cancelar mi pedido',
-    time: '19:35',
-    messages: [
-      {
-        id: 'm21',
-        role: 'user',
-        content: 'Hola, hice el pedido #104 pero me equivoqué de dirección',
-        time: '19:33',
-      },
-      {
-        id: 'm22',
-        role: 'assistant',
-        content:
-          'Comprendo Mariana. Para modificaciones urgentes de pedidos en curso, voy a comunicarte de inmediato con un asesor de nuestro equipo.',
-        time: '19:34',
-      },
-      {
-        id: 'm23',
-        role: 'user',
-        content: 'Por favor necesito hablar con un asesor para cancelar mi pedido',
-        time: '19:35',
-      },
-    ],
-  },
-  {
-    id: 'conv_3',
-    customerName: 'Carlos Ruiz',
-    phone: '+57 320 888 9900',
-    status: 'human_active',
-    lastMessage: 'Listo Carlos, ya envié tu factura por correo',
-    time: '19:20',
-    messages: [
-      {
-        id: 'm31',
-        role: 'user',
-        content: '¿Me puedes generar factura electrónica a nombre de empresa?',
-        time: '19:15',
-      },
-      {
-        id: 'm32',
-        role: 'human_agent',
-        content:
-          '¡Hola Carlos! Claro que sí, con mucho gusto. Ya tomé el caso. Pásame tu RUT o NIT por aquí.',
-        time: '19:17',
-      },
-      {
-        id: 'm33',
-        role: 'user',
-        content: 'NIT 900.123.456-7 a nombre de Inversiones SAS.',
-        time: '19:18',
-      },
-      {
-        id: 'm34',
-        role: 'human_agent',
-        content: 'Listo Carlos, ya envié tu factura por correo.',
-        time: '19:20',
-      },
-    ],
-  },
-];
-
 export default function BusinessInboxPage() {
-  const [chats, setChats] = useState<ChatItem[]>(initialChats);
-  const [selectedChatId, setSelectedChatId] = useState<string>('conv_2');
+  const [chats, setChats] = useState<InboxConversation[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string>('conv_sc_2');
   const [filter, setFilter] = useState<'all' | 'waiting' | 'human' | 'ai'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [newMessageText, setNewMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const businessId = '018f3a5b-0001-7000-8000-000000000001';
+  const businessId = '00000000-0000-0000-0000-000000000001';
+
+  // Load conversations from Supabase
+  const loadConversations = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await getInboxConversationsAction();
+      if (res.success && res.data) {
+        setChats(res.data);
+        if (res.data.length > 0 && !res.data.some((c) => c.id === selectedChatId)) {
+          setSelectedChatId(res.data[0].id);
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedChatId]);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
 
   // Handle incoming realtime message
   const handleRealtimeMessage = useCallback((msg: any) => {
@@ -151,17 +66,18 @@ export default function BusinessInboxPage() {
     setChats((prev) =>
       prev.map((c) => {
         if (c.id === msg.conversation_id) {
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           return {
             ...c,
             lastMessage: msg.content,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time,
             messages: [
               ...c.messages,
               {
                 id: msg.id || `rt_${Date.now()}`,
                 role: msg.role,
                 content: msg.content,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time,
               },
             ],
           };
@@ -182,7 +98,7 @@ export default function BusinessInboxPage() {
   // Connect to Supabase Realtime & Presence
   const { connectionStatus, activeOperators } = useRealtimeInbox({
     businessId,
-    operatorEmail: 'daniela.operador@lacasona.com',
+    operatorEmail: 'admin@agilizio.com',
     activeConversationId: selectedChatId,
     onNewMessage: handleRealtimeMessage,
     onConversationUpdate: handleRealtimeConversation,
@@ -192,7 +108,7 @@ export default function BusinessInboxPage() {
 
   // Operator takes control: triggers state machine transition & mutes AI
   const handleTakeControl = async (chatId: string) => {
-    await claimConversationAction({ conversationId: chatId, operatorId: 'op_daniela' });
+    await claimConversationAction({ conversationId: chatId, operatorId: 'op_admin' });
     setChats((prev) =>
       prev.map((c) =>
         c.id === chatId
@@ -258,13 +174,13 @@ export default function BusinessInboxPage() {
     setIsSending(true);
 
     try {
-      // 1. Dispatch via Server Action to WhatsApp Cloud API
+      // 1. Dispatch via Server Action to WhatsApp Cloud API and Supabase
       await sendHumanMessageAction({
         conversationId: activeChat.id,
         businessId,
         content,
         customerPhone: activeChat.phone,
-        operatorId: 'op_daniela',
+        operatorId: 'op_admin',
       });
 
       // 2. Optimistic UI update
@@ -297,11 +213,24 @@ export default function BusinessInboxPage() {
     }
   };
 
+  // Counts for filter pills
+  const waitingCount = chats.filter((c) => c.status === 'waiting_for_human').length;
+  const humanCount = chats.filter((c) => c.status === 'human_active').length;
+  const aiCount = chats.filter((c) => c.status === 'active').length;
+
   const filteredChats = chats.filter((c) => {
     if (filter === 'waiting') return c.status === 'waiting_for_human';
     if (filter === 'human') return c.status === 'human_active';
     if (filter === 'ai') return c.status === 'active';
     return true;
+  }).filter((c) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      c.customerName.toLowerCase().includes(query) ||
+      c.phone.includes(query) ||
+      c.lastMessage.toLowerCase().includes(query)
+    );
   });
 
   return (
@@ -311,7 +240,10 @@ export default function BusinessInboxPage() {
         {/* Search & Header with Realtime status */}
         <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-900 text-lg">Bandeja en Vivo</h2>
+            <div>
+              <h2 className="font-bold text-slate-900 text-lg">Bandeja en Vivo</h2>
+              <p className="text-[11px] text-slate-500">Restaurante Santa Cruz</p>
+            </div>
             {/* Realtime WebSocket Status Indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -323,12 +255,14 @@ export default function BusinessInboxPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Buscar cliente o teléfono..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar cliente, teléfono o plato..."
               className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
-          {/* Filter Pills */}
+          {/* Filter Pills with dynamic counts */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <button
               onClick={() => setFilter('all')}
@@ -348,7 +282,7 @@ export default function BusinessInboxPage() {
                   : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
               }`}
             >
-              Espera (1)
+              Espera ({waitingCount})
             </button>
             <button
               onClick={() => setFilter('human')}
@@ -358,7 +292,7 @@ export default function BusinessInboxPage() {
                   : 'bg-purple-100 text-purple-800 hover:bg-purple-200'
               }`}
             >
-              Humano (1)
+              Humano ({humanCount})
             </button>
             <button
               onClick={() => setFilter('ai')}
@@ -368,64 +302,74 @@ export default function BusinessInboxPage() {
                   : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
               }`}
             >
-              IA (1)
+              IA ({aiCount})
             </button>
           </div>
         </div>
 
         {/* Conversation List */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-          {filteredChats.map((chat) => {
-            const isSelected = chat.id === selectedChatId;
-            const isWaiting = chat.status === 'waiting_for_human';
+          {isLoading && chats.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando conversaciones...
+            </div>
+          ) : filteredChats.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs">
+              No hay conversaciones en esta categoría
+            </div>
+          ) : (
+            filteredChats.map((chat) => {
+              const isSelected = chat.id === selectedChatId;
+              const isWaiting = chat.status === 'waiting_for_human';
 
-            return (
-              <div
-                key={chat.id}
-                onClick={() => setSelectedChatId(chat.id)}
-                className={`p-4 cursor-pointer transition-colors relative ${
-                  isSelected
-                    ? 'bg-blue-50/70 border-l-4 border-l-blue-600'
-                    : isWaiting
-                    ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-500'
-                    : 'hover:bg-slate-100/60'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="font-semibold text-sm text-slate-900 truncate">
-                      {chat.customerName}
-                    </span>
-                    {isWaiting && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                    )}
+              return (
+                <div
+                  key={chat.id}
+                  onClick={() => setSelectedChatId(chat.id)}
+                  className={`p-4 cursor-pointer transition-colors relative ${
+                    isSelected
+                      ? 'bg-blue-50/70 border-l-4 border-l-blue-600'
+                      : isWaiting
+                      ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-500'
+                      : 'hover:bg-slate-100/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="font-semibold text-sm text-slate-900 truncate">
+                        {chat.customerName}
+                      </span>
+                      {isWaiting && (
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-400">{chat.time}</span>
                   </div>
-                  <span className="text-[11px] text-slate-400">{chat.time}</span>
-                </div>
-                <div className="text-xs text-slate-500 font-mono mb-2">{chat.phone}</div>
-                <p className="text-xs text-slate-600 truncate mb-2">{chat.lastMessage}</p>
+                  <div className="text-xs text-slate-500 font-mono mb-2">{chat.phone}</div>
+                  <p className="text-xs text-slate-600 truncate mb-2">{chat.lastMessage}</p>
 
-                <div className="flex items-center justify-between">
-                  {chat.status === 'active' && (
-                    <Badge variant="success">
-                      <Bot className="w-3 h-3 inline mr-1" /> IA Atendiendo
-                    </Badge>
-                  )}
-                  {chat.status === 'waiting_for_human' && (
-                    <Badge variant="warning">
-                      <AlertCircle className="w-3 h-3 inline mr-1" /> Esperando Asesor
-                    </Badge>
-                  )}
-                  {chat.status === 'human_active' && (
-                    <Badge variant="purple">
-                      <UserCheck className="w-3 h-3 inline mr-1" /> Asesor en Control
-                    </Badge>
-                  )}
-                  {chat.status === 'closed' && <Badge variant="outline">Cerrada</Badge>}
+                  <div className="flex items-center justify-between">
+                    {chat.status === 'active' && (
+                      <Badge variant="success">
+                        <Bot className="w-3 h-3 inline mr-1" /> IA Atendiendo
+                      </Badge>
+                    )}
+                    {chat.status === 'waiting_for_human' && (
+                      <Badge variant="warning">
+                        <AlertCircle className="w-3 h-3 inline mr-1" /> Esperando Asesor
+                      </Badge>
+                    )}
+                    {chat.status === 'human_active' && (
+                      <Badge variant="purple">
+                        <UserCheck className="w-3 h-3 inline mr-1" /> Asesor en Control
+                      </Badge>
+                    )}
+                    {chat.status === 'closed' && <Badge variant="outline">Cerrada</Badge>}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -511,7 +455,7 @@ export default function BusinessInboxPage() {
             <div className="bg-purple-50 border-b border-purple-200 px-4 py-2 flex items-center justify-between text-xs text-purple-900">
               <span className="flex items-center gap-2 font-medium">
                 <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
-                <strong>Bot Silenciado:</strong> Estás atendiendo manualmente a este cliente. Los mensajes se envían a su WhatsApp.
+                <strong>Bot Silenciado:</strong> Estás atendiendo manualmente a este comensal. Las respuestas se envían a su WhatsApp.
               </span>
               <button
                 onClick={() => handleReleaseToBot(activeChat.id)}
@@ -524,7 +468,7 @@ export default function BusinessInboxPage() {
             <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between text-xs text-amber-900 animate-pulse">
               <span className="flex items-center gap-2 font-medium">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <strong>Atención Requerida:</strong> El cliente solicitó hablar con un asesor. Haz clic en "Tomar Control" para responder.
+                <strong>Atención Requerida:</strong> El comensal solicitó hablar con un asesor. Haz clic en "Tomar Control" para responder.
               </span>
               <button
                 onClick={() => handleTakeControl(activeChat.id)}
@@ -558,7 +502,7 @@ export default function BusinessInboxPage() {
                         <UserCheck className="w-3 h-3" /> Operador Humano (Enviado por WhatsApp)
                       </span>
                     )}
-                    {isUser && <span className="font-semibold text-slate-600">Cliente</span>}
+                    {isUser && <span className="font-semibold text-slate-600">Comensal</span>}
                     <span>• {msg.time}</span>
                   </div>
 
@@ -588,7 +532,7 @@ export default function BusinessInboxPage() {
                 onChange={(e) => setNewMessageText(e.target.value)}
                 placeholder={
                   activeChat.status === 'human_active'
-                    ? 'Escribe tu respuesta para enviarla al WhatsApp del cliente...'
+                    ? 'Escribe tu respuesta para enviarla al WhatsApp del comensal...'
                     : 'Escribe un mensaje (tomarás el control y silenciarás al bot automáticamente)...'
                 }
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"

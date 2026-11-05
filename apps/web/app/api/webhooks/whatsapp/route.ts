@@ -80,16 +80,15 @@ const processor = new WhatsAppWebhookProcessor({
     }
 
     // 2. Fetch live products from Supabase
-    let products = defaultSantaCruzProducts;
+    let products = defaultSantaCruzProducts.map((p) => ({ ...p, isAvailable: true }));
     let businessName = 'Restaurante Santa Cruz';
 
     try {
       const supabase = await createClient();
       const { data: dbProducts } = await supabase
         .from('products')
-        .select('id, name, description, price, category')
-        .eq('business_id', businessId)
-        .eq('is_active', true);
+        .select('id, name, description, price, category, is_active, is_available, metadata')
+        .eq('business_id', businessId);
 
       if (dbProducts && dbProducts.length > 0) {
         products = dbProducts.map((p: any) => ({
@@ -98,6 +97,7 @@ const processor = new WhatsAppWebhookProcessor({
           description: p.description || '',
           price: Number(p.price) || 0,
           category: p.category || 'Parrilla',
+          isAvailable: p.is_available !== undefined ? Boolean(p.is_available) : Boolean(p.is_active),
         }));
       }
 
@@ -153,7 +153,7 @@ const processor = new WhatsAppWebhookProcessor({
           agent_id: 'agent_wa_01',
           version: 1,
           industry: 'food_and_beverage',
-          system_instructions: `Eres "agilizio", el anfitrión y asistente virtual oficial de ${businessName} por WhatsApp. Atiende a ${customerName || 'nuestro comensal'} con calidez campesina, asesora sobre nuestros platos a la brasa, precios exactos en pesos colombianos y gestiona reservas de mesas y pedidos a domicilio.`,
+          system_instructions: `Eres "agilizio", el anfitrión y asistente virtual oficial de ${businessName} por WhatsApp. Atiende a ${customerName || 'nuestro comensal'} con calidez campesina, asesora sobre nuestros platos a la brasa, precios exactos en pesos colombianos y gestiona reservas de mesas y pedidos a domicilio.\n\nDIRECTRIZ CRÍTICA DE DISPONIBILIDAD: Recomienda proactivamente ÚNICAMENTE platos con is_available: true. Si el cliente pregunta específicamente por un plato que tenga is_available: false (marcado como agotado en la base de datos), infórmale amablemente que por hoy se encuentra agotado, y ofrécele de inmediato una alternativa disponible de la misma categoría.`,
           personality: { tone: 'cálido, atento y profesional', language: 'es-CO' },
           business_context: {
             overview: 'Carnes a la brasa, cortes madurados, platos típicos colombianos y bebidas naturales.',
@@ -187,11 +187,12 @@ const processor = new WhatsAppWebhookProcessor({
             const results = filtered.length > 0 ? filtered : products;
             return {
               found_count: results.length,
-              products: results.map((p) => ({
+              products: results.map((p: any) => ({
                 name: p.name,
                 price: p.price,
                 description: p.description,
                 category: p.category,
+                is_available: p.isAvailable !== undefined ? p.isAvailable : true,
               })),
             };
           }
@@ -247,7 +248,22 @@ const processor = new WhatsAppWebhookProcessor({
       query.includes('comida') ||
       query.includes('almorzar')
     ) {
-      const sample = products.slice(0, 3).map((p) => `• *${p.name}* — $${p.price.toLocaleString('es-CO')}`).join('\n');
+      const availableItems = products.filter((p: any) => p.isAvailable !== false);
+      const listToSample = availableItems.length > 0 ? availableItems : products;
+      const sample = listToSample.slice(0, 3).map((p) => `• *${p.name}* — $${p.price.toLocaleString('es-CO')}`).join('\n');
+
+      const unavailableMatch = products.find(
+        (p: any) => p.isAvailable === false && query.includes(p.name.toLowerCase().split(' ')[0] || '')
+      );
+
+      if (unavailableMatch) {
+        return {
+          replyText: `${greeting} Lamentablemente por el día de hoy nuestro plato *${unavailableMatch.name}* se encuentra *agotado*.\n\nSin embargo, te recomiendo nuestras especialidades listas en la parrilla:\n${sample}\n\n¿Te gustaría ordenar alguna de ellas o prefieres que reservemos una mesa?`,
+          inputTokens: 25,
+          outputTokens: 75,
+        };
+      }
+
       return {
         replyText: `${greeting} Bienvenido a *${businessName}* 🥩🔥\n\nNuestras recomendaciones de la parrilla hoy:\n${sample}\n\n¿Te gustaría ordenar a domicilio o prefieres que te reservemos una mesa?`,
         inputTokens: 25,

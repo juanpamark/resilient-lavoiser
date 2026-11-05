@@ -6,17 +6,21 @@ import {
   Plus,
   Search,
   Trash2,
+  Edit2,
   CheckCircle,
   XCircle,
   AlertTriangle,
   Loader2,
   RefreshCw,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   getProductsAction,
   createProductAction,
+  updateProductAction,
   deleteProductAction,
   toggleProductAvailabilityAction,
   type CatalogProduct,
@@ -104,6 +108,19 @@ export default function BusinessCatalogPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productToDelete, setProductToDelete] = useState<CatalogProduct | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit State
+  const [productToEdit, setProductToEdit] = useState<CatalogProduct | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    sku: '',
+    category: 'Parrilla & Carnes',
+    price: '',
+    description: '',
+    isAvailable: true,
+  });
+
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -141,6 +158,7 @@ export default function BusinessCatalogPage() {
     loadProducts();
   }, []);
 
+  // Quick Toggle Availability
   const toggleAvailability = async (id: string) => {
     const target = products.find((p) => p.id === id);
     if (!target) return;
@@ -149,6 +167,11 @@ export default function BusinessCatalogPage() {
     // Optimistic UI update
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, isAvailable: newStatus } : p))
+    );
+
+    const statusLabel = newStatus ? 'DISPONIBLE' : 'AGOTADO';
+    showNotification(
+      `"${target.name}" marcado como ${statusLabel}. El cambio se sincronizó con el sitio web y el agente de WhatsApp.`
     );
 
     try {
@@ -165,6 +188,51 @@ export default function BusinessCatalogPage() {
       setProducts((prev) =>
         prev.map((p) => (p.id === id ? { ...p, isAvailable: !newStatus } : p))
       );
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEditModal = (prod: CatalogProduct) => {
+    setProductToEdit(prod);
+    setEditForm({
+      name: prod.name,
+      sku: prod.sku,
+      category: prod.category,
+      price: String(prod.price),
+      description: prod.description,
+      isAvailable: prod.isAvailable,
+    });
+  };
+
+  // Submit Edit Form
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!productToEdit || !editForm.name.trim() || !editForm.price) return;
+
+    setIsUpdating(true);
+    try {
+      const res = await updateProductAction(productToEdit.id, {
+        name: editForm.name.trim(),
+        sku: editForm.sku.trim(),
+        category: editForm.category,
+        price: Number(editForm.price),
+        description: editForm.description.trim(),
+        isAvailable: editForm.isAvailable,
+      });
+
+      if (res.success && res.data) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === productToEdit.id ? res.data! : p))
+        );
+        showNotification(`Plato "${res.data.name}" actualizado exitosamente en Supabase.`);
+        setProductToEdit(null);
+      } else {
+        showNotification(res.error || 'Error al actualizar el plato', 'error');
+      }
+    } catch {
+      showNotification('Error de conexión al actualizar plato', 'error');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -246,11 +314,22 @@ export default function BusinessCatalogPage() {
             <Badge variant="purple">Catálogo en Vivo</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Los platos, precios y disponibilidad registrados aquí son consultados en tiempo real por agilizio en WhatsApp y en el simulador.
+            Los cambios de precios, disponibilidad y descripciones se sincronizan automáticamente en tu sitio web y con el agente de WhatsApp.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
+          <a
+            href="/menu/restaurante-santa-cruz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-xs"
+            title="Abrir menú digital público de comensales"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
+            Ver Menú Público
+          </a>
+
           <button
             onClick={loadProducts}
             disabled={isLoading}
@@ -321,8 +400,8 @@ export default function BusinessCatalogPage() {
                 <th className="px-6 py-3.5">Categoría</th>
                 <th className="px-6 py-3.5">SKU</th>
                 <th className="px-6 py-3.5">Precio (COP)</th>
-                <th className="px-6 py-3.5">Disponibilidad</th>
-                <th className="px-6 py-3.5 text-right">Acción</th>
+                <th className="px-6 py-3.5">Disponibilidad en Vivo</th>
+                <th className="px-6 py-3.5 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -342,30 +421,38 @@ export default function BusinessCatalogPage() {
                   <td className="px-6 py-4">
                     <button
                       onClick={() => toggleAvailability(prod.id)}
-                      className="cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer shadow-xs border ${
+                        prod.isAvailable
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                          : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                      }`}
+                      title="Haz clic para alternar entre Disponible y Agotado"
                     >
                       {prod.isAvailable ? (
-                        <Badge variant="success">
-                          <CheckCircle className="w-3 h-3 inline mr-1" /> Disponible
-                        </Badge>
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Disponible</span>
+                        </>
                       ) : (
-                        <Badge variant="danger">
-                          <XCircle className="w-3 h-3 inline mr-1" /> Agotado
-                        </Badge>
+                        <>
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Agotado</span>
+                        </>
                       )}
                     </button>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1.5">
                       <button
-                        onClick={() => toggleAvailability(prod.id)}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                        onClick={() => handleOpenEditModal(prod)}
+                        title="Editar plato y precio"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                       >
-                        {prod.isAvailable ? 'Marcar Agotado' : 'Habilitar'}
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setProductToDelete(prod)}
-                        title="Eliminar producto"
+                        title="Eliminar plato"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -381,11 +468,11 @@ export default function BusinessCatalogPage() {
 
       {/* Modal Agregar Producto */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
             <h3 className="font-bold text-slate-900 text-lg mb-1">Agregar Plato a la Carta</h3>
             <p className="text-xs text-slate-500 mb-5">
-              Al guardar, agilizio consultará de inmediato este plato en el simulador y por WhatsApp.
+              Al guardar, se reflejará de inmediato en el sitio web y el agente de IA podrá ofrecerlo.
             </p>
 
             <form onSubmit={handleAddProduct} className="space-y-4">
@@ -483,6 +570,142 @@ export default function BusinessCatalogPage() {
                     </>
                   ) : (
                     'Guardar Plato'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Producto */}
+      {productToEdit && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg">Editar Plato / Precio</h3>
+                  <p className="text-xs text-slate-500">Actualiza los datos del plato en Supabase</p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nombre del Plato / Bebida
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Precio (COP)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Categoría
+                  </label>
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="Parrilla & Carnes">Parrilla & Carnes</option>
+                    <option value="Platos Típicos">Platos Típicos</option>
+                    <option value="Pescados & Mariscos">Pescados & Mariscos</option>
+                    <option value="Para Compartir">Para Compartir</option>
+                    <option value="Bebidas">Bebidas</option>
+                    <option value="Postres">Postres</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  SKU (Código Interno)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.sku}
+                  onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Descripción e Ingredientes
+                </label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full p-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Disponibilidad Switch */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-800">Disponibilidad en Vivo</div>
+                  <div className="text-[11px] text-slate-500">
+                    {editForm.isAvailable ? 'Disponible para ordenar' : 'Marcado como agotado'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, isAvailable: !editForm.isAvailable })}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all border ${
+                    editForm.isAvailable
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}
+                >
+                  {editForm.isAvailable ? 'Disponible' : 'Agotado'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={() => setProductToEdit(null)}
+                  className="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Guardando...
+                    </>
+                  ) : (
+                    'Actualizar Plato'
                   )}
                 </button>
               </div>

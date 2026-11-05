@@ -98,30 +98,38 @@ export async function POST(req: NextRequest) {
     // 2. Query live products from Supabase for this tenant
     const { data: dbProducts } = await supabase
       .from('products')
-      .select('id, name, description, price, category, is_active, metadata')
-      .eq('business_id', effectiveBusinessId)
-      .eq('is_active', true);
+      .select('id, name, description, price, category, is_active, is_available, metadata')
+      .eq('business_id', effectiveBusinessId);
 
-    const liveProducts = dbProducts && dbProducts.length > 0 ? dbProducts : [
-      { id: 'p1', name: 'Parrillada Especial Santa Cruz', description: 'Punta de anca, pechuga a la brasa, costilla, chorizo artesanal, arepa de choclo y papas criollas.', price: 75000, category: 'Parrilla & Carnes', is_active: true },
-      { id: 'p2', name: 'Churrasco a la Brasa 350g', description: 'Corte tierno de chatas maduradas al carbón con yuca y chimichurri casero.', price: 42000, category: 'Parrilla & Carnes', is_active: true },
-      { id: 'p3', name: 'Bandeja Típica Santa Cruz', description: 'Fríjoles campesinos, arroz, carne molida en paila, chicharrón crocante carnudo, huevo frito y aguacate.', price: 36000, category: 'Platos Típicos', is_active: true },
-      { id: 'p4', name: 'Costillas BBQ Ahumadas', description: '500g de costillas tiernas bañadas en salsa BBQ artesanal con panela.', price: 38500, category: 'Parrilla & Carnes', is_active: true },
-      { id: 'p5', name: 'Cazuela de Mariscos Tradicional', description: 'Camarones, calamares y filete en crema de coco y cilantro con arroz de coco.', price: 48000, category: 'Pescados & Mariscos', is_active: true },
-      { id: 'p6', name: 'Picada Campesina Familiar', description: 'Lomo de cerdo, carne de res, chicharrón, morcilla, plátano maduro con queso y arepitas.', price: 95000, category: 'Para Compartir', is_active: true },
-      { id: 'p7', name: 'Jugo Natural en Fruta Fresca', description: 'Fruta 100% natural (Mango, Maracuyá, Lulo o Mora) en agua o leche.', price: 7500, category: 'Bebidas', is_active: true },
-      { id: 'p8', name: 'Limonada de Coco Frappé', description: 'Leche de coco cremosa, jugo de limón fresco y menta.', price: 9500, category: 'Bebidas', is_active: true },
+    const liveProducts = dbProducts && dbProducts.length > 0 ? dbProducts.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: Number(p.price) || 0,
+      category: p.category,
+      isAvailable: p.is_available !== undefined ? Boolean(p.is_available) : Boolean(p.is_active),
+    })) : [
+      { id: 'p1', name: 'Parrillada Especial Santa Cruz', description: 'Punta de anca, pechuga a la brasa, costilla, chorizo artesanal, arepa de choclo y papas criollas.', price: 75000, category: 'Parrilla & Carnes', isAvailable: true },
+      { id: 'p2', name: 'Churrasco a la Brasa 350g', description: 'Corte tierno de chatas maduradas al carbón con yuca y chimichurri casero.', price: 42000, category: 'Parrilla & Carnes', isAvailable: true },
+      { id: 'p3', name: 'Bandeja Típica Santa Cruz', description: 'Fríjoles campesinos, arroz, carne molida en paila, chicharrón crocante carnudo, huevo frito y aguacate.', price: 36000, category: 'Platos Típicos', isAvailable: true },
+      { id: 'p4', name: 'Costillas BBQ Ahumadas', description: '500g de costillas tiernas bañadas en salsa BBQ artesanal con panela.', price: 38500, category: 'Parrilla & Carnes', isAvailable: true },
+      { id: 'p5', name: 'Cazuela de Mariscos Tradicional', description: 'Camarones, calamares y filete en crema de coco y cilantro con arroz de coco.', price: 48000, category: 'Pescados & Mariscos', isAvailable: true },
+      { id: 'p6', name: 'Picada Campesina Familiar', description: 'Lomo de cerdo, carne de res, chicharrón, morcilla, plátano maduro con queso y arepitas.', price: 95000, category: 'Para Compartir', isAvailable: true },
+      { id: 'p7', name: 'Jugo Natural en Fruta Fresca', description: 'Fruta 100% natural (Mango, Maracuyá, Lulo o Mora) en agua o leche.', price: 7500, category: 'Bebidas', isAvailable: true },
+      { id: 'p8', name: 'Limonada de Coco Frappé', description: 'Leche de coco cremosa, jugo de limón fresco y menta.', price: 9500, category: 'Bebidas', isAvailable: true },
     ];
 
     // 3. Assemble complete AgentConfig
+    const baseInstructions =
+      agentConfig?.system_instructions ||
+      'Eres "agilizio", el anfitrión y asistente virtual oficial de Restaurante Santa Cruz. Atiende con la máxima calidez, detalle de platos a la brasa, reservas y precios exactos.';
+
     const effectiveConfig: AgentConfig = {
       id: 'cfg_sim_01',
       agent_id: 'agent_sim_01',
       version: 1,
       industry: selectedIndustry,
-      system_instructions:
-        agentConfig?.system_instructions ||
-        'Eres "agilizio", el anfitrión y asistente virtual oficial de Restaurante Santa Cruz. Atiende con la máxima calidez, detalle de platos a la brasa, reservas y precios exactos.',
+      system_instructions: `${baseInstructions}\n\nDIRECTRIZ CRÍTICA DE DISPONIBILIDAD: Recomienda proactivamente ÚNICAMENTE platos con is_available: true. Si el cliente pregunta específicamente por un plato que tenga is_available: false (marcado como agotado en la base de datos), infórmale amablemente que por hoy se encuentra agotado, y ofrécele de inmediato una alternativa disponible de la misma categoría.`,
       personality: {
         tone: agentConfig?.personality?.tone || 'amable y profesional',
         language: agentConfig?.personality?.language || 'es-CO',
@@ -190,6 +198,7 @@ export async function POST(req: NextRequest) {
             price: p.price,
             category: p.category,
             description: p.description,
+            is_available: p.isAvailable !== undefined ? p.isAvailable : (p.is_available ?? true),
           })),
         };
       }
@@ -331,9 +340,24 @@ export async function POST(req: NextRequest) {
         result: toolRes,
         durationMs: Date.now() - tStart,
       });
-      const productsList = Array.isArray(toolRes.products) && toolRes.products.length > 0 ? toolRes.products : liveProducts;
-      const names = productsList.slice(0, 3).map((p: any) => `${p.name} ($${Number(p.price || 0).toLocaleString('es-CO')})`).join(', ');
-      replyText = `¡Hola! Consultando nuestro catálogo en vivo de ${currentBusiness.name}, te recomiendo: ${names}. ¿Te gustaría ordenar alguno?`;
+      const rawList = Array.isArray(toolRes.products) && toolRes.products.length > 0 ? toolRes.products : liveProducts;
+      const availableList = rawList.filter((p: any) => (p.is_available ?? p.isAvailable) !== false);
+      const names = (availableList.length > 0 ? availableList : rawList)
+        .slice(0, 3)
+        .map((p: any) => `${p.name} ($${Number(p.price || 0).toLocaleString('es-CO')})`)
+        .join(', ');
+
+      const unavailableMatch = rawList.find(
+        (p: any) =>
+          (p.is_available === false || p.isAvailable === false) &&
+          queryLower.includes(p.name.toLowerCase().split(' ')[0] || '')
+      );
+
+      if (unavailableMatch) {
+        replyText = `¡Hola! Lamentablemente por hoy nuestro plato "${unavailableMatch.name}" se encuentra agotado. Sin embargo, te recomiendo nuestras especialidades disponibles en la parrilla: ${names}. ¿Te gustaría ordenar alguna de ellas?`;
+      } else {
+        replyText = `¡Hola! Consultando nuestro catálogo en vivo de ${currentBusiness.name}, te recomiendo: ${names}. ¿Te gustaría ordenar alguno?`;
+      }
     } else if (queryLower.includes('cita') || queryLower.includes('agenda') || queryLower.includes('hora') || queryLower.includes('doctor')) {
       const tStart = Date.now();
       const toolRes = await toolExecutor('check_availability', { service_type: 'Consulta', preferred_date: 'mañana' }, { businessId, conversationId: 'conv_sim' });

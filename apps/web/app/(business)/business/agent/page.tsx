@@ -853,18 +853,34 @@ export default function BusinessAgentPage() {
         </CardContent>
       </Card>
 
-      {/* agilizio Simulator Drawer / Slide-over */}
+      {/* agilizio WhatsApp Native Simulator Drawer / Slide-over */}
       {isSimulatorOpen && (
         <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-slide-left">
-          {/* Simulator Header */}
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
-            <div className="flex items-center gap-2">
-              <Bot className="w-5 h-5 text-blue-400" />
+          {/* WhatsApp Header (#075E54) */}
+          <div className="px-4 py-3 bg-[#075E54] text-white flex items-center justify-between shrink-0 shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSimulatorOpen(false)}
+                className="text-white/80 hover:text-white p-1 -ml-1 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="w-9 h-9 rounded-full bg-emerald-800 text-white flex items-center justify-center font-bold text-xs ring-2 ring-white/20">
+                SC
+              </div>
+
               <div>
-                <h3 className="font-semibold text-sm">Simulador agilizio</h3>
-                <span className="text-[10px] text-blue-300 capitalize font-mono">
-                  {selectedIndustry} | Gemini Flash Latest
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-bold text-sm text-white leading-tight">Restaurante Santa Cruz</h3>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>en línea</span>
+                  <span className="text-white/40">•</span>
+                  <span className="text-[10px] text-emerald-300 font-mono">agilizio IA</span>
+                </div>
               </div>
             </div>
 
@@ -877,74 +893,94 @@ export default function BusinessAgentPage() {
                       id: 'welcome',
                       role: 'assistant',
                       content:
-                        'Simulador reiniciado. Puedes escribir cualquier mensaje para probar a agilizio con la configuración actual.',
+                        '¡Hola! Bienvenido a Restaurante Santa Cruz. 🥩🔥 Soy agilizio, tu anfitrión virtual. ¿En qué te puedo colaborar hoy? Puedes consultarme por nuestros cortes a la brasa, hacer una reserva o pedir a domicilio.',
                     },
                   ])
                 }
                 title="Reiniciar chat de prueba"
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSimulatorOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Simulator Message Feed */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50">
-            {simMessages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
-              >
-                {m.toolCall && (
-                  <div className="mb-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md max-w-[85%] break-words">
-                    {m.toolCall}
-                  </div>
-                )}
+          {/* WhatsApp Chat Wallpaper Feed (#EFEAE2) */}
+          <div 
+            className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#EFEAE2]"
+            style={{
+              backgroundImage: 'radial-gradient(#d1c7b7 0.75px, transparent 0.75px)',
+              backgroundSize: '16px 16px',
+            }}
+          >
+            {/* Encryption & Notice Pill */}
+            <div className="flex justify-center my-1">
+              <span className="px-3 py-1 rounded-lg bg-[#FFEECD] text-[#54656F] text-[10px] font-medium text-center shadow-xs max-w-[90%]">
+                🔒 Simulador oficial de WhatsApp de agilizio. Conectado a la base de datos de Restaurante Santa Cruz.
+              </span>
+            </div>
+
+            {simMessages.map((m) => {
+              const isUser = m.role === 'user';
+              const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              return (
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
-                    m.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-tr-none'
-                      : 'bg-white text-slate-900 border border-slate-200 rounded-tl-none'
-                  }`}
+                  key={m.id}
+                  className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                 >
-                  {m.content}
+                  {m.toolCall && (
+                    <div className="mb-1 text-[10px] font-mono text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md shadow-xs max-w-[85%] flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-600" />
+                      {m.toolCall}
+                    </div>
+                  )}
+
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow-sm relative ${
+                      isUser
+                        ? 'bg-[#D9FDD3] text-[#111B21] rounded-tr-none'
+                        : 'bg-white text-[#111B21] rounded-tl-none'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                    <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#667781]">
+                      <span>{timeStr}</span>
+                      {isUser && <span className="text-[#53BDEB] font-bold">✓✓</span>}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isSimLoading && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-3 py-1.5 w-fit animate-pulse">
-                <Sparkle className="w-3.5 h-3.5 text-blue-600 animate-spin" />
-                agilizio procesando razonamiento y tools...
+              <div className="flex items-center gap-2 text-xs text-[#54656F] bg-white rounded-2xl px-3.5 py-2 w-fit shadow-sm rounded-tl-none animate-pulse">
+                <Sparkle className="w-3.5 h-3.5 text-[#00A884] animate-spin" />
+                <span>agilizio está escribiendo...</span>
               </div>
             )}
           </div>
 
-          {/* Simulator Input Form */}
-          <form onSubmit={handleSendSimMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2">
-            <input
-              type="text"
-              value={simInput}
-              onChange={(e) => setSimInput(e.target.value)}
-              placeholder="Escribe como un cliente para probar..."
-              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={isSimLoading || !simInput.trim()}
-              className="px-3.5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+          {/* WhatsApp Style Input Form */}
+          <div className="p-2.5 bg-[#F0F2F5] border-t border-slate-200">
+            <form onSubmit={handleSendSimMessage} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={simInput}
+                disabled={isSimLoading}
+                onChange={(e) => setSimInput(e.target.value)}
+                placeholder="Escribe un mensaje como comensal..."
+                className="flex-1 px-4 py-2.5 text-xs bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-1 focus:ring-[#00A884] shadow-xs"
+              />
+              <button
+                type="submit"
+                disabled={isSimLoading || !simInput.trim()}
+                className="w-10 h-10 rounded-full bg-[#00A884] hover:bg-[#008f6f] text-white flex items-center justify-center shrink-0 shadow-sm transition-colors disabled:opacity-40"
+              >
+                <Send className="w-4 h-4 ml-0.5" />
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

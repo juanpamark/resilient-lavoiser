@@ -1,363 +1,565 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Star,
-  CheckCircle2,
-  Clock,
-  MessageSquare,
-  Sparkles,
-  RefreshCw,
-  Copy,
-  ExternalLink,
-  ShieldCheck,
-  Send,
-  AlertTriangle,
-  ThumbsUp,
-  Check,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  getGoogleReviewsAction,
-  generateAiReviewReplyAction,
-  publishReviewReplyAction,
-  type GoogleReview,
-  type ReviewMetrics,
-} from '@/lib/actions/review.actions';
+import * as React from 'react';
+import { Button } from '@/components/ui/button';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Switch } from '@/components/ui/switch';
 
-export default function BusinessReviewsPage() {
-  const [reviews, setReviews] = useState<GoogleReview[]>([]);
-  const [metrics, setMetrics] = useState<ReviewMetrics | null>(null);
-  const [filter, setFilter] = useState<'all' | 'positive' | 'attention' | 'pending'>('all');
-  const [autoPilot5Stars, setAutoPilot5Stars] = useState(true);
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
-  const [publishingId, setPublishingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [editedReplies, setEditedReplies] = useState<Record<string, string>>({});
+type ReviewFilter = 'all' | 'pending' | 'critical' | 'five_stars';
+type ResponseStrategyMode = 'diplomatic_whatsapp' | 'local_seo_boost' | 'warm_gratitude';
+type ReviewStatus = 'pending_reply' | 'published';
 
-  const loadReviews = useCallback(async () => {
-    const res = await getGoogleReviewsAction();
-    if (res.success) {
-      setReviews(res.reviews);
-      setMetrics(res.metrics);
-      const initialEdits: Record<string, string> = {};
-      res.reviews.forEach((r) => {
-        initialEdits[r.id] = r.aiReply;
-      });
-      setEditedReplies(initialEdits);
-    }
-  }, []);
+interface SentimentTag {
+  label: string;
+  tone: 'positive' | 'negative' | 'neutral';
+}
 
-  useEffect(() => {
-    loadReviews();
-  }, [loadReviews]);
+interface GoogleMapsReview {
+  id: string;
+  authorName: string;
+  authorInitials: string;
+  authorBadge: string;
+  rating: 1 | 2 | 3 | 4 | 5;
+  publishedRelativeTime: string;
+  visitModality: 'Domicilio' | 'Comedor en salón';
+  reviewText: string;
+  sentimentTags: SentimentTag[];
+  status: ReviewStatus;
+  selectedStrategy: ResponseStrategyMode;
+  draftReplies: Record<ResponseStrategyMode, string>;
+  seoKeywordsInjected: string[];
+  publishedAt?: string;
+}
 
-  const handleRegenerate = async (review: GoogleReview) => {
-    setGeneratingId(review.id);
-    try {
-      const res = await generateAiReviewReplyAction({
-        reviewId: review.id,
-        authorName: review.authorName,
-        rating: review.rating,
-        reviewText: review.reviewText,
-        dishMentioned: review.dishMentioned,
-      });
-      if (res.success) {
-        setEditedReplies((prev) => ({ ...prev, [review.id]: res.aiReply }));
-        setReviews((prev) =>
-          prev.map((r) => (r.id === review.id ? { ...r, aiReply: res.aiReply } : r))
-        );
-      }
-    } finally {
-      setGeneratingId(null);
-    }
+const INITIAL_REVIEWS: GoogleMapsReview[] = [
+  {
+    id: 'rev-301',
+    authorName: 'Camilo Andrés Vargas',
+    authorInitials: 'CV',
+    authorBadge: 'Local Guide · Nivel 6 · 48 reseñas',
+    rating: 2,
+    publishedRelativeTime: 'Hace 38 min',
+    visitModality: 'Domicilio',
+    reviewText:
+      'La carne de Santa Cruz siempre nos ha parecido deliciosa, pero hoy pedimos una Punta de Anca y un Baby Beef a domicilio un viernes por la noche y tardó casi una hora en llegar a Villa Luz. Las papas criollas llegaron frías.',
+    sentimentTags: [
+      { label: '⚠️ Queja: Demora en domicilio (60m)', tone: 'negative' },
+      { label: '⚠️ Queja: Temperatura guarnición', tone: 'negative' },
+      { label: '✓ Elogia: Sabor de los cortes', tone: 'positive' },
+    ],
+    status: 'pending_reply',
+    selectedStrategy: 'diplomatic_whatsapp',
+    seoKeywordsInjected: [
+      'Santa Cruz Parrilla',
+      'Punta de Anca madurada',
+      'domicilios en Engativá',
+    ],
+    draftReplies: {
+      diplomatic_whatsapp:
+        'Hola Camilo, te saluda Don Andrés, propietario de Santa Cruz Parrilla. Te ofrezco una disculpa sincera porque la espera de hoy hacia Villa Luz y la temperatura de las papas no representan el estándar de nuestra parrilla. Queremos reponerte esta experiencia personalmente en tu próximo pedido: por favor escríbenos directo a nuestra línea VIP de gerencia en WhatsApp (+57 314 289 4410) con tu número de orden para darte atención prioritaria.',
+      local_seo_boost:
+        'Hola Camilo, lamentamos la demora presentada en la ruta de domicilios en Engativá este viernes. En Santa Cruz Parrilla trabajamos cada día para que nuestra Punta de Anca madurada y Baby Beef al carbón lleguen en óptimas condiciones. Escríbenos por favor a nuestro WhatsApp directo (+57 314 289 4410) para compensarte en tu próxima orden.',
+      warm_gratitude:
+        'Camilo, muchas gracias por destacar el sabor de nuestra carne y por alertarnos sobre el tiempo de entrega de hoy. Ya reforzamos el empaque térmico de nuestras guarniciones. Por favor contáctanos en WhatsApp (+57 314 289 4410) para tener una atención especial contigo.',
+    },
+  },
+  {
+    id: 'rev-302',
+    authorName: 'María Fernanda Ospina',
+    authorInitials: 'MO',
+    authorBadge: 'Local Guide · Nivel 5 · 19 reseñas',
+    rating: 5,
+    publishedRelativeTime: 'Hace 2 horas',
+    visitModality: 'Comedor en salón',
+    reviewText:
+      '¡Increíble experiencia! Fuimos a celebrar el cumpleaños de mi papá. La Punta de Anca en término 3/4 estaba súper jugosa, el chorizo santarrosano delicioso y la jarra de sangría espectacular. Además pedimos por WhatsApp antes de llegar y todo fue rapidísimo.',
+    sentimentTags: [
+      { label: '✓ Elogia: Punta de Anca 3/4', tone: 'positive' },
+      { label: '✓ Elogia: Jarra de Sangría', tone: 'positive' },
+      { label: '✓ Elogia: Atención en cumpleaños', tone: 'positive' },
+    ],
+    status: 'pending_reply',
+    selectedStrategy: 'local_seo_boost',
+    seoKeywordsInjected: [
+      'mejor parrilla en Engativá',
+      'Punta de Anca al carbón',
+      'restaurante para cumpleaños en Bogotá',
+      'chorizo santarrosano artesanal',
+    ],
+    draftReplies: {
+      local_seo_boost:
+        '¡Qué alegría leer tu reseña, María Fernanda! Fue un honor celebrar el cumpleaños de tu papá con nosotros en Santa Cruz Parrilla. Nos enorgullece saber que disfrutaron nuestra Punta de Anca al carbón en término 3/4, el chorizo santarrosano artesanal y la sangría de la casa. Cuando busquen la mejor parrilla en Engativá y un restaurante para celebrar en familia en Bogotá, esta siempre será su casa. ¡Los esperamos pronto!',
+      diplomatic_whatsapp:
+        '¡Muchas gracias María Fernanda! Nos alegra enormemente haber hecho especial el cumpleaños de tu papá. Recuerda que por nuestra línea de WhatsApp puedes reservar tu mesa VIP cuando quieras regresar.',
+      warm_gratitude:
+        '¡Mil gracias por tus 5 estrellas, María Fernanda! Qué gusto saber que la Punta de Anca 3/4 y la sangría artesanal les encantaron a ti y a tu papá. ¡Los esperamos de vuelta muy pronto en Santa Cruz!',
+    },
+  },
+  {
+    id: 'rev-303',
+    authorName: 'Jorge Eliécer Salamanca',
+    authorInitials: 'JS',
+    authorBadge: '12 reseñas en Google',
+    rating: 5,
+    publishedRelativeTime: 'Ayer',
+    visitModality: 'Domicilio',
+    reviewText:
+      'Pedí por el WhatsApp del restaurante y me sorprendió lo rápido que me atendieron. El Churrasco Argentino llegó en el término medio exacto que pedí y muy bien empacado.',
+    sentimentTags: [
+      { label: '✓ Elogia: Bot de WhatsApp rápido', tone: 'positive' },
+      { label: '✓ Elogia: Churrasco Argentino 1/2', tone: 'positive' },
+    ],
+    status: 'published',
+    publishedAt: 'Publicado ayer a las 21:14',
+    selectedStrategy: 'local_seo_boost',
+    seoKeywordsInjected: [
+      'Churrasco Argentino en Bogotá',
+      'asados a domicilio en Engativá',
+      'Santa Cruz Parrilla',
+    ],
+    draftReplies: {
+      local_seo_boost:
+        '¡Muchas gracias por tu calificación de 5 estrellas, Jorge Eliécer! Nos alegra saber que nuestro canal de pedidos por WhatsApp te brindó una atención ágil y que disfrutaste tu Churrasco Argentino al carbón en término medio exacto. Gracias por elegir a Santa Cruz Parrilla para tus asados a domicilio en Engativá y Bogotá.',
+      diplomatic_whatsapp:
+        '¡Gracias Jorge Eliécer! Nuestro canal de WhatsApp está activo 24/7 para tus próximos pedidos.',
+      warm_gratitude:
+        '¡Qué buen comentario, Jorge Eliécer! Gracias por destacar la calidad de nuestro Churrasco Argentino y nuestro servicio a domicilio.',
+    },
+  },
+];
+
+function renderStars(rating: number): React.ReactNode {
+  return (
+    <div className="inline-flex items-center gap-0.5" aria-label={`${rating} de 5 estrellas`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          className={[
+            'w-3.5 h-3.5',
+            star <= rating ? 'text-[#D97706] fill-[#D97706]' : 'text-[#D5D2C8] fill-[#E8E6DF]',
+          ].join(' ')}
+          viewBox="0 0 24 24"
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+export default function BusinessReviewsGuardianPage() {
+  const [reviews, setReviews] = React.useState<GoogleMapsReview[]>(INITIAL_REVIEWS);
+  const [filter, setFilter] = React.useState<ReviewFilter>('all');
+  const [autoPublishFiveStars, setAutoPublishFiveStars] = React.useState<boolean>(true);
+  const [publishingId, setPublishingId] = React.useState<string | null>(null);
+
+  const metrics = React.useMemo(() => {
+    const pendingCount = reviews.filter((r) => r.status === 'pending_reply').length;
+    const criticalCount = reviews.filter((r) => r.rating <= 3).length;
+    const fiveStarsCount = reviews.filter((r) => r.rating >= 4).length;
+    return {
+      total: reviews.length,
+      pendingCount,
+      criticalCount,
+      fiveStarsCount,
+    };
+  }, [reviews]);
+
+  const filteredReviews = React.useMemo(() => {
+    return reviews.filter((review) => {
+      if (filter === 'pending') return review.status === 'pending_reply';
+      if (filter === 'critical') return review.rating <= 3;
+      if (filter === 'five_stars') return review.rating >= 4;
+      return true;
+    });
+  }, [reviews, filter]);
+
+  const handleSelectStrategy = (
+    reviewId: string,
+    strategy: ResponseStrategyMode
+  ) => {
+    setReviews((prev) =>
+      prev.map((rev) =>
+        rev.id === reviewId ? { ...rev, selectedStrategy: strategy } : rev
+      )
+    );
   };
 
-  const handlePublish = async (reviewId: string) => {
+  const handleEditDraftText = (reviewId: string, newText: string) => {
+    setReviews((prev) =>
+      prev.map((rev) => {
+        if (rev.id !== reviewId) return rev;
+        return {
+          ...rev,
+          draftReplies: {
+            ...rev.draftReplies,
+            [rev.selectedStrategy]: newText,
+          },
+        };
+      })
+    );
+  };
+
+  const handlePublishReply = (reviewId: string) => {
     setPublishingId(reviewId);
-    const replyText = editedReplies[reviewId] || '';
-    try {
-      await publishReviewReplyAction(reviewId, replyText);
+    window.setTimeout(() => {
+      const nowTime = new Date().toLocaleTimeString('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+
       setReviews((prev) =>
-        prev.map((r) =>
-          r.id === reviewId ? { ...r, status: 'published', publishedReply: replyText } : r
+        prev.map((rev) =>
+          rev.id === reviewId
+            ? {
+                ...rev,
+                status: 'published',
+                publishedAt: `Publicado hoy a las ${nowTime} en Google Maps`,
+              }
+            : rev
         )
       );
-    } finally {
       setPublishingId(null);
-    }
+    }, 650);
   };
-
-  const handleCopy = (reviewId: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(reviewId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const filteredReviews = reviews.filter((r) => {
-    if (filter === 'positive') return r.rating >= 4;
-    if (filter === 'attention') return r.rating <= 3;
-    if (filter === 'pending') return r.status !== 'published';
-    return true;
-  });
-
-  const attentionCount = reviews.filter((r) => r.rating <= 3).length;
-  const pendingCount = reviews.filter((r) => r.status !== 'published').length;
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Google Business Profile
-            </span>
-            <span className="text-xs text-slate-400">• Ficha Verificada</span>
+    <div className="h-full w-full flex flex-col bg-[#FAF8F5] overflow-hidden">
+      {/* =====================================================================
+          CABECERA DEL GUARDIÁN DE RESEÑAS + MÉTRICAS DE REPUTACIÓN Y SEO LOCAL
+      ===================================================================== */}
+      <header className="px-6 py-4 bg-white border-b border-[#E8E6DF] space-y-3.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-base font-semibold text-[#141413] tracking-[-0.02em]">
+                Guardián de Reseñas · Google Business Profile
+              </h1>
+              <StatusPill
+                status="ai_active"
+                label="Motor SEO + Contención Activo"
+                metric="4.8 ★"
+                pulse
+              />
+            </div>
+            <p className="text-xs text-[#575653] mt-0.5">
+              Convierte reseñas de 5 estrellas en posicionamiento SEO local en
+              Google Maps y desvía quejas de 1-3 estrellas a tu WhatsApp privado.
+            </p>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Guardián de Reseñas Google Maps con IA
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Responde al 100% de las opiniones de Restaurante Santa Cruz en segundos para mejorar tu posicionamiento SEO local.
-          </p>
-        </div>
 
-        {/* Autopilot Switch */}
-        <div className="flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/70">
-          <div className="text-right">
-            <div className="text-xs font-bold text-slate-900">Piloto Automático (5 Estrellas)</div>
-            <div className="text-[11px] text-emerald-800">Responde opiniones positivas sin esperar</div>
-          </div>
-          <button
-            onClick={() => setAutoPilot5Stars(!autoPilot5Stars)}
-            className={`w-12 h-6 rounded-full transition-colors relative p-0.5 ${
-              autoPilot5Stars ? 'bg-emerald-600' : 'bg-slate-300'
-            }`}
-          >
-            <div
-              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                autoPilot5Stars ? 'translate-x-6' : 'translate-x-0'
-              }`}
+          {/* Switch de Piloto Automático para 5 Estrellas */}
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#FAF8F5] border border-[#E8E6DF]">
+            <Switch
+              size="sm"
+              variant="emerald"
+              checked={autoPublishFiveStars}
+              onCheckedChange={setAutoPublishFiveStars}
+              label="Auto-publicar 5★ con SEO Local"
+              description="Las de 1-3★ siempre piden tu aprobación"
             />
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Reputation Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-            <Star className="w-6 h-6 fill-amber-500 text-amber-500" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase">Calificación Google</div>
-            <div className="text-2xl font-bold text-slate-900 mt-0.5 flex items-center gap-1.5">
-              {metrics?.averageRating || 4.8}
-              <div className="flex text-amber-400 text-xs">★★★★★</div>
-            </div>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-            <MessageSquare className="w-6 h-6" />
+        {/* Barra de Filtros por Calificación + Indicadores Rápidos */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="inline-flex p-0.5 rounded-lg bg-[#F3F1EC] border border-[#E8E6DF] select-none">
+            {(
+              [
+                { id: 'all', label: 'Todas las reseñas', count: metrics.total },
+                {
+                  id: 'pending',
+                  label: 'Por responder',
+                  count: metrics.pendingCount,
+                },
+                {
+                  id: 'critical',
+                  label: '🛡️ Contención (1-3★)',
+                  count: metrics.criticalCount,
+                },
+                {
+                  id: 'five_stars',
+                  label: '📍 Impulso SEO (4-5★)',
+                  count: metrics.fiveStarsCount,
+                },
+              ] as const
+            ).map((tab) => {
+              const isSelected = filter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setFilter(tab.id)}
+                  className={[
+                    'h-7 px-3 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer',
+                    isSelected
+                      ? 'bg-white text-[#141413] shadow-2xs font-semibold'
+                      : 'text-[#575653] hover:text-[#141413]',
+                  ].join(' ')}
+                >
+                  <span>{tab.label}</span>
+                  <span className="font-mono metric-mono text-[10px] px-1.5 py-0.2 rounded bg-[#FAF8F5] border border-[#E8E6DF] text-[#575653]">
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase">Total Reseñas</div>
-            <div className="text-2xl font-bold text-slate-900 mt-0.5">{metrics?.totalReviews || 184}</div>
+
+          <div className="flex items-center gap-4 text-xs text-[#575653]">
+            <span>
+              Calificación mensual:{' '}
+              <strong className="font-mono metric-mono text-[#141413]">
+                4.8 ★ (142 reseñas)
+              </strong>
+            </span>
+            <span className="text-[#D5D2C8]">|</span>
+            <span>
+              Keywords SEO posicionadas:{' '}
+              <strong className="font-mono metric-mono text-[#065F46]">
+                +18 este mes
+              </strong>
+            </span>
           </div>
         </div>
+      </header>
 
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase">Tasa de Respuesta</div>
-            <div className="text-2xl font-bold text-emerald-700 mt-0.5">
-              {metrics?.responseRate || 96.2}%
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-            <Clock className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase">Tiempo Promedio</div>
-            <div className="text-2xl font-bold text-purple-700 mt-0.5">
-              {metrics?.avgResponseTimeHours || 1.4}h
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-            filter === 'all'
-              ? 'bg-slate-900 text-white'
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          Todas ({reviews.length})
-        </button>
-        <button
-          onClick={() => setFilter('positive')}
-          className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-            filter === 'positive'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-          }`}
-        >
-          5 Estrellas ({reviews.filter((r) => r.rating >= 4).length})
-        </button>
-        <button
-          onClick={() => setFilter('attention')}
-          className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-            filter === 'attention'
-              ? 'bg-amber-600 text-white'
-              : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-          }`}
-        >
-          Quejas / Atención Requerida ({attentionCount})
-        </button>
-        <button
-          onClick={() => setFilter('pending')}
-          className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-            filter === 'pending'
-              ? 'bg-purple-600 text-white'
-              : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-          }`}
-        >
-          Borradores Pendientes ({pendingCount})
-        </button>
-      </div>
-
-      {/* Review List */}
-      <div className="space-y-4">
+      {/* =====================================================================
+          LISTA DE TARJETAS COMPARATIVAS "ESPEJO" (RESEÑA IZQ | IA DER)
+      ===================================================================== */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
         {filteredReviews.map((review) => {
+          const isCritical = review.rating <= 3;
           const isPublished = review.status === 'published';
-          const isNegative = review.rating <= 3;
+          const activeDraft = review.draftReplies[review.selectedStrategy];
 
           return (
-            <div
+            <article
               key={review.id}
-              className={`p-6 rounded-2xl border transition-all ${
-                isNegative
-                  ? 'border-amber-200 bg-amber-50/20'
-                  : 'border-slate-200 bg-white'
-              } shadow-sm space-y-4`}
+              className={[
+                'rounded-lg bg-white border overflow-hidden transition-all grid grid-cols-1 lg:grid-cols-2',
+                isCritical && !isPublished
+                  ? 'border-[#D97706] shadow-[0_2px_10px_rgba(217,119,6,0.08)]'
+                  : 'border-[#D5D2C8] shadow-2xs',
+              ].join(' ')}
             >
-              {/* Review Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-sm">
-                    {review.authorName.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                      {review.authorName}
-                      <span className="text-amber-500 flex text-xs">
-                        {'★'.repeat(review.rating)}
-                        {'☆'.repeat(5 - review.rating)}
+              {/* ===============================================================
+                  LADO IZQUIERDO: RESEÑA PÚBLICA EN GOOGLE MAPS + SENTIMIENTO
+              =============================================================== */}
+              <div className="p-5 border-b lg:border-b-0 lg:border-r border-[#E8E6DF] flex flex-col justify-between space-y-4 bg-white">
+                <div className="space-y-3">
+                  {/* Cabecera del Autor y Estrellas */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={[
+                          'h-9 w-9 rounded-full border flex items-center justify-center text-xs font-semibold shrink-0',
+                          isCritical
+                            ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]'
+                            : 'bg-[#F3F1EC] border-[#D5D2C8] text-[#141413]',
+                        ].join(' ')}
+                      >
+                        {review.authorInitials}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-semibold text-[#141413]">
+                            {review.authorName}
+                          </h2>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F3F1EC] text-[#575653] border border-[#E8E6DF]">
+                            {review.visitModality}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#8A8884]">
+                          {review.authorBadge}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        {renderStars(review.rating)}
+                        <span className="text-xs font-mono metric-mono font-bold text-[#141413]">
+                          {review.rating}.0
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono metric-mono text-[#8A8884]">
+                        {review.publishedRelativeTime}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-400">{review.timeAgo} en Google Maps</div>
                   </div>
+
+                  {/* Texto de la reseña del comensal */}
+                  <blockquote className="p-3.5 rounded-lg bg-[#FAF8F5] border border-[#E8E6DF] text-[13px] text-[#141413] leading-relaxed">
+                    “{review.reviewText}”
+                  </blockquote>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {review.dishMentioned && (
-                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                      Plato: {review.dishMentioned}
+                {/* Diagnóstico de Sentimiento Extraído por IA */}
+                <div className="pt-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8884]">
+                      Lectura de Sentimiento IA
                     </span>
-                  )}
-                  {isPublished ? (
-                    <Badge variant="success">
-                      <CheckCircle2 className="w-3 h-3 inline mr-1" /> Respondida en Google
-                    </Badge>
-                  ) : (
-                    <Badge variant="warning">
-                      <Clock className="w-3 h-3 inline mr-1" /> Borrador Pendiente
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Review Body */}
-              <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                "{review.reviewText}"
-              </p>
-
-              {/* AI Reply Card */}
-              <div className="p-4 rounded-xl border border-purple-100 bg-purple-50/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    Respuesta Inteligente agilizio
-                  </div>
-                  <button
-                    onClick={() => handleRegenerate(review)}
-                    disabled={generatingId === review.id || isPublished}
-                    className="inline-flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-semibold disabled:opacity-50 transition-colors"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${generatingId === review.id ? 'animate-spin' : ''}`} />
-                    {generatingId === review.id ? 'Regenerando con Gemini...' : 'Regenerar con IA'}
-                  </button>
-                </div>
-
-                <textarea
-                  value={editedReplies[review.id] ?? review.aiReply}
-                  disabled={isPublished}
-                  onChange={(e) =>
-                    setEditedReplies((prev) => ({ ...prev, [review.id]: e.target.value }))
-                  }
-                  rows={3}
-                  className="w-full p-3 rounded-lg border border-purple-200 bg-white text-xs text-slate-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-slate-50"
-                />
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    onClick={() =>
-                      handleCopy(review.id, editedReplies[review.id] || review.aiReply)
-                    }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition-colors"
-                  >
-                    {copiedId === review.id ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Copiado
-                      </>
+                    {isCritical ? (
+                      <span className="text-[10px] font-mono metric-mono font-semibold text-[#92400E] bg-[#FFFBEB] px-2 py-0.5 rounded border border-[#FDE68A]">
+                        ⚡ Prioridad Alta: Desviar a WhatsApp privado
+                      </span>
                     ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" /> Copiar Respuesta
-                      </>
+                      <span className="text-[10px] font-mono metric-mono font-semibold text-[#065F46] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                        📍 Oportunidad de Indexación SEO Local
+                      </span>
                     )}
-                  </button>
+                  </div>
 
-                  {!isPublished ? (
-                    <button
-                      onClick={() => handlePublish(review.id)}
-                      disabled={publishingId === review.id}
-                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors disabled:opacity-50"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      {publishingId === review.id ? 'Publicando...' : 'Aprobar y Publicar en Google'}
-                    </button>
-                  ) : (
-                    <span className="text-xs text-emerald-700 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Publicado exitosamente
+                  <div className="flex flex-wrap gap-1.5">
+                    {review.sentimentTags.map((tag) => (
+                      <span
+                        key={tag.label}
+                        className={[
+                          'px-2 py-0.5 rounded text-[11px] font-medium border',
+                          tag.tone === 'negative'
+                            ? 'bg-[#FFF7ED] text-[#9A3412] border-[#FED7AA]'
+                            : 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]',
+                        ].join(' ')}
+                      >
+                        {tag.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* ===============================================================
+                  LADO DERECHO: RESPUESTA ESTRATÉGICA IA (ESPEJO)
+              =============================================================== */}
+              <div className="p-5 bg-[#FAF8F5]/70 flex flex-col justify-between space-y-3.5">
+                <div className="space-y-3">
+                  {/* Selector de Modo de Respuesta (Contención vs SEO Local) */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[#575653]">
+                      Estrategia de Respuesta IA
                     </span>
+
+                    <div className="inline-flex p-0.5 rounded-md bg-[#E8E6DF]/70 border border-[#D5D2C8]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectStrategy(review.id, 'diplomatic_whatsapp')
+                        }
+                        className={[
+                          'h-6 px-2.5 rounded text-[11px] font-medium transition-all cursor-pointer',
+                          review.selectedStrategy === 'diplomatic_whatsapp'
+                            ? 'bg-[#141413] text-white font-semibold shadow-2xs'
+                            : 'text-[#575653] hover:text-[#141413]',
+                        ].join(' ')}
+                      >
+                        🛡️ Diplomacia + WhatsApp VIP
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectStrategy(review.id, 'local_seo_boost')
+                        }
+                        className={[
+                          'h-6 px-2.5 rounded text-[11px] font-medium transition-all cursor-pointer',
+                          review.selectedStrategy === 'local_seo_boost'
+                            ? 'bg-[#0F291E] text-white font-semibold shadow-2xs'
+                            : 'text-[#575653] hover:text-[#141413]',
+                        ].join(' ')}
+                      >
+                        📍 SEO Local Gastronómico
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectStrategy(review.id, 'warm_gratitude')
+                        }
+                        className={[
+                          'h-6 px-2.5 rounded text-[11px] font-medium transition-all cursor-pointer',
+                          review.selectedStrategy === 'warm_gratitude'
+                            ? 'bg-white text-[#141413] font-semibold shadow-2xs'
+                            : 'text-[#575653] hover:text-[#141413]',
+                        ].join(' ')}
+                      >
+                        🤝 Breve
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Editor de Respuesta Generada */}
+                  <textarea
+                    rows={4}
+                    disabled={isPublished}
+                    value={activeDraft}
+                    onChange={(e) =>
+                      handleEditDraftText(review.id, e.target.value)
+                    }
+                    className={[
+                      'w-full p-3 rounded-lg border text-xs leading-relaxed transition-colors resize-none',
+                      isPublished
+                        ? 'bg-[#F3F1EC] border-[#E8E6DF] text-[#575653]'
+                        : 'bg-white border-[#D5D2C8] text-[#141413] focus:outline-none focus:border-[#0F291E]',
+                    ].join(' ')}
+                  />
+
+                  {/* Píldoras de Keywords SEO Locales Inyectadas */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-mono metric-mono text-[#8A8884]">
+                      Keywords SEO inyectadas:
+                    </span>
+                    {review.seoKeywordsInjected.map((kw) => (
+                      <span
+                        key={kw}
+                        className="px-1.5 py-0.5 rounded bg-[#EEF5F1] border border-[#CDE2D6] text-[#0F291E] font-mono text-[10px] font-medium"
+                      >
+                        +{kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pie de Acción: Publicar en 1 Clic en Google Maps */}
+                <div className="pt-2 border-t border-[#E8E6DF] flex items-center justify-between gap-3">
+                  {isPublished ? (
+                    <div className="flex items-center justify-between w-full">
+                      <StatusPill
+                        status="ai_active"
+                        label={
+                          review.publishedAt ??
+                          'Publicado en Google Business Profile'
+                        }
+                      />
+                      <span className="text-[11px] font-mono metric-mono text-[#8A8884]">
+                        Indexado en Maps ✓
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-[#575653]">
+                        {isCritical
+                          ? 'Incluye invitación directa a WhatsApp gerencial'
+                          : 'Optimizado para búsquedas en Engativá y Bogotá'}
+                      </span>
+
+                      <Button
+                        variant={isCritical ? 'amber' : 'primary'}
+                        size="sm"
+                        isLoading={publishingId === review.id}
+                        onClick={() => handlePublishReply(review.id)}
+                      >
+                        {isCritical
+                          ? 'Aprobar y Publicar Contención →'
+                          : 'Publicar Respuesta en Google Maps ✓'}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>

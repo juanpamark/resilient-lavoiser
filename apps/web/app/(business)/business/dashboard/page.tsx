@@ -1,227 +1,483 @@
-import React from 'react';
+'use client';
+
+import * as React from 'react';
 import Link from 'next/link';
-import {
-  MessageSquare,
-  ShoppingBag,
-  Users,
-  Bot,
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Switch } from '@/components/ui/switch';
 
-export default function BusinessDashboardPage() {
-  const stats = [
-    {
-      title: 'Conversaciones Hoy',
-      value: '28',
-      subtext: '92% automatizadas por IA',
-      icon: MessageSquare,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-    },
-    {
-      title: 'Pedidos del Día',
-      value: '12',
-      subtext: '$396,000 COP generados',
-      icon: ShoppingBag,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-    },
-    {
-      title: 'Clientes Nuevos',
-      value: '9',
-      subtext: 'Registrados vía WhatsApp',
-      icon: Users,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-    },
-    {
-      title: 'Estado del Agente',
-      value: 'Activo',
-      subtext: 'Gemini 3.5 Flash en línea',
-      icon: Bot,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-    },
-  ];
+interface ExecutiveKpi {
+  id: string;
+  label: string;
+  value: string;
+  delta: string;
+  deltaPositive: boolean;
+  sublabel: string;
+}
 
-  const recentConversations = [
-    {
-      id: 'conv_1',
-      customerName: 'Santiago Gómez',
-      phone: '+57 310 555 6677',
-      lastMessage: '¿Qué cortes de carne a la brasa me recomiendan?',
-      status: 'active' as const,
-      statusLabel: 'IA Atendiendo',
-      time: 'Hace 4 min',
-    },
-    {
-      id: 'conv_2',
-      customerName: 'Mariana Duarte',
-      phone: '+57 301 222 3344',
-      lastMessage: 'Quisiera reservar una mesa para 6 personas este domingo',
-      status: 'waiting_for_human' as const,
-      statusLabel: 'Esperando Asesor',
-      time: 'Hace 8 min',
-    },
-    {
-      id: 'conv_3',
-      customerName: 'Carlos Ruiz',
-      phone: '+57 320 888 9900',
-      lastMessage: 'Perfecto, ya te transfiero el valor a Nequi por la parrillada',
-      status: 'human_active' as const,
-      statusLabel: 'Asesor en Control',
-      time: 'Hace 15 min',
-    },
-  ];
+interface HourlyTrafficSlot {
+  hourLabel: string;
+  conversations: number;
+  ordersClosed: number;
+  revenueCop: number;
+  isPeak?: boolean;
+}
+
+interface TopAiProduct {
+  rank: number;
+  name: string;
+  category: string;
+  unitsSoldByAi: number;
+  revenueCop: number;
+  upsellPairingRate: string;
+  available: boolean;
+}
+
+const EXECUTIVE_KPIS: ExecutiveKpi[] = [
+  {
+    id: 'kpi-revenue',
+    label: 'Ventas Cerradas por IA (7 días)',
+    value: '$6.480.000',
+    delta: '+24.8%',
+    deltaPositive: true,
+    sublabel: '92 comandas pagadas vía WhatsApp sin intervención humana',
+  },
+  {
+    id: 'kpi-Ticket',
+    label: 'Ticket Promedio con Upselling IA',
+    value: '$70.430',
+    delta: '+$12.400 vs manual',
+    deltaPositive: true,
+    sublabel: '38% aceptó sugerencia de entrada o maridaje de sangría',
+  },
+  {
+    id: 'kpi-speed',
+    label: 'Tiempo de Respuesta en Hora Pico',
+    value: '1.1 seg',
+    delta: '-13 min vs cajero',
+    deltaPositive: true,
+    sublabel: '0 chats abandonados en viernes y sábado de 7:00 PM a 10:00 PM',
+  },
+  {
+    id: 'kpi-handoff',
+    label: 'Resolución Autónoma (Deflection)',
+    value: '91.4%',
+    delta: 'Solo 2 Handoffs hoy',
+    deltaPositive: true,
+    sublabel: '214 conversaciones resueltas de principio a fin por Agilizio',
+  },
+];
+
+const HOURLY_WHATSAPP_TRAFFIC: HourlyTrafficSlot[] = [
+  { hourLabel: '12:00', conversations: 28, ordersClosed: 14, revenueCop: 890000 },
+  {
+    hourLabel: '13:00',
+    conversations: 42,
+    ordersClosed: 23,
+    revenueCop: 1540000,
+    isPeak: true,
+  },
+  { hourLabel: '14:00', conversations: 31, ordersClosed: 16, revenueCop: 1020000 },
+  { hourLabel: '16:00', conversations: 12, ordersClosed: 5, revenueCop: 310000 },
+  { hourLabel: '18:00', conversations: 29, ordersClosed: 15, revenueCop: 980000 },
+  {
+    hourLabel: '19:00',
+    conversations: 54,
+    ordersClosed: 31,
+    revenueCop: 2240000,
+    isPeak: true,
+  },
+  {
+    hourLabel: '20:00',
+    conversations: 61,
+    ordersClosed: 36,
+    revenueCop: 2680000,
+    isPeak: true,
+  },
+  {
+    hourLabel: '21:00',
+    conversations: 38,
+    ordersClosed: 19,
+    revenueCop: 1390000,
+  },
+];
+
+const TOP_AI_DISHES: TopAiProduct[] = [
+  {
+    rank: 1,
+    name: 'Punta de Anca Madurada 400g',
+    category: 'Cortes de Res',
+    unitsSoldByAi: 46,
+    revenueCop: 2668000,
+    upsellPairingRate: '64% con Chorizo',
+    available: true,
+  },
+  {
+    rank: 2,
+    name: 'Picada Santa Cruz Familiar (4 Pers)',
+    category: 'Para Compartir',
+    unitsSoldByAi: 24,
+    revenueCop: 2064000,
+    upsellPairingRate: '71% con Sangría 1L',
+    available: true,
+  },
+  {
+    rank: 3,
+    name: 'Churrasco Argentino 350g',
+    category: 'Cortes de Res',
+    unitsSoldByAi: 31,
+    revenueCop: 1612000,
+    upsellPairingRate: '48% con Club Colombia',
+    available: true,
+  },
+  {
+    rank: 4,
+    name: 'Baby Beef 350g',
+    category: 'Cortes de Res',
+    unitsSoldByAi: 19,
+    revenueCop: 1026000,
+    upsellPairingRate: '42% con Limonada Coco',
+    available: true,
+  },
+  {
+    rank: 5,
+    name: 'Costillas San Luis BBQ 500g',
+    category: 'Cerdo y Aves',
+    unitsSoldByAi: 14,
+    revenueCop: 686000,
+    upsellPairingRate: '50% con Papa Criolla',
+    available: false,
+  },
+];
+
+function formatCop(amount: number): string {
+  return `$${amount.toLocaleString('es-CO')}`;
+}
+
+export default function BusinessExecutiveDashboardPage() {
+  // Switches operativos de inicio de turno
+  const [aiAutopilotEnabled, setAiAutopilotEnabled] = React.useState<boolean>(true);
+  const [rainyModeDelayEnabled, setRainyModeDelayEnabled] =
+    React.useState<boolean>(false);
+  const [upsellAggressiveEnabled, setUpsellAggressiveEnabled] =
+    React.useState<boolean>(true);
+
+  const maxHourlyConversations = React.useMemo(() => {
+    return Math.max(...HOURLY_WHATSAPP_TRAFFIC.map((s) => s.conversations), 1);
+  }, []);
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="h-full w-full overflow-y-auto bg-[#FAF8F5] p-6 space-y-6">
+      {/* =====================================================================
+          CABECERA EJECUTIVA + ACCIONES RÁPIDAS DE INICIO DE TURNO
+      ===================================================================== */}
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#E8E6DF]">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Panel de Operaciones — Restaurante Santa Cruz
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Monitorea en tiempo real las conversaciones con tus clientes y la actividad del Agente de IA.
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-base font-semibold text-[#141413] tracking-[-0.02em]">
+              Centro de Mando · Santa Cruz Parrilla
+            </h1>
+            <StatusPill
+              status={aiAutopilotEnabled ? 'ai_active' : 'human_handoff'}
+              label={
+                aiAutopilotEnabled
+                  ? 'Recepcionista IA Activo'
+                  : 'IA en Pausa Manual'
+              }
+              metric={rainyModeDelayEnabled ? 'Domicilio 50m' : 'Domicilio 35m'}
+              pulse={aiAutopilotEnabled}
+            />
+          </div>
+          <p className="text-xs text-[#575653] mt-0.5">
+            Rendimiento comercial en tiempo real de tu canal de WhatsApp y
+            estado operativo de cocina.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/business/inbox"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium shadow-sm hover:bg-blue-700 transition-colors"
-          >
-            <MessageSquare className="w-4 h-4" />
-            Abrir Bandeja en Vivo
+
+        {/* Botones de Navegación Operativa Directa */}
+        <div className="flex items-center gap-2">
+          <Link href="/business/inbox">
+            <Button variant="amber" size="sm">
+              🔥 Atender 2 Handoffs en Vivo
+            </Button>
+          </Link>
+          <Link href="/business/orders">
+            <Button variant="outline" size="sm">
+              Ver 5 Comandas en KDS →
+            </Button>
+          </Link>
+          <Link href="/business/agent">
+            <Button variant="primary" size="sm">
+              Probar Simulador
+            </Button>
           </Link>
         </div>
-      </div>
+      </header>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={idx}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    {stat.title}
-                  </span>
-                  <div className={`p-2.5 rounded-xl ${stat.bg} ${stat.color}`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-                  <div className="text-xs text-slate-500 mt-1">{stat.subtext}</div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Meta Direct Billing Notification Banner */}
-      <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
+      {/* =====================================================================
+          BARRA DE CONTROLES RÁPIDOS DE TURNO (ERGONOMÍA PARA ADMINISTRADOR)
+      ===================================================================== */}
+      <section
+        aria-label="Controles rápidos de turno"
+        className="grid grid-cols-1 md:grid-cols-3 gap-3"
+      >
+        <div className="p-3.5 rounded-lg bg-white border border-[#E8E6DF] shadow-2xs flex items-center justify-between gap-3">
           <div>
-            <h4 className="text-sm font-semibold text-emerald-900">
-              WhatsApp Cloud API Conectado (Embedded Signup)
-            </h4>
-            <p className="text-xs text-emerald-700">
-              Número: +57 300 999 8877 • WABA ID: 109876543210987 • Facturación directa con Meta
+            <p className="text-xs font-semibold text-[#141413]">
+              Piloto Automático 24/7 en WhatsApp
+            </p>
+            <p className="text-[11px] text-[#575653]">
+              Responde catálogo, toma pedidos y confirma pagos Nequi.
             </p>
           </div>
+          <Switch
+            variant="emerald"
+            checked={aiAutopilotEnabled}
+            onCheckedChange={setAiAutopilotEnabled}
+          />
         </div>
-        <Link
-          href="/business/channels"
-          className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 flex items-center gap-1"
-        >
-          Gestionar Conexión <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
 
-      {/* Recent Chats Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between w-full">
+        <div className="p-3.5 rounded-lg bg-white border border-[#E8E6DF] shadow-2xs flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-[#141413]">
+              🌧️ Modo Lluvia / Alta Congestión (+15 min)
+            </p>
+            <p className="text-[11px] text-[#575653]">
+              Ajusta la promesa de entrega del bot de 35m a 50m al instante.
+            </p>
+          </div>
+          <Switch
+            variant="amber"
+            checked={rainyModeDelayEnabled}
+            onCheckedChange={setRainyModeDelayEnabled}
+          />
+        </div>
+
+        <div className="p-3.5 rounded-lg bg-white border border-[#E8E6DF] shadow-2xs flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-[#141413]">
+              🍷 Upselling de Sangría y Entradas
+            </p>
+            <p className="text-[11px] text-[#575653]">
+              Sugiere maridaje antes de generar el resumen de cobro.
+            </p>
+          </div>
+          <Switch
+            variant="forest"
+            checked={upsellAggressiveEnabled}
+            onCheckedChange={setUpsellAggressiveEnabled}
+          />
+        </div>
+      </section>
+
+      {/* =====================================================================
+          TARJETAS KPI EJECUTIVAS (ALTA DENSIDAD + .METRIC-MONO)
+      ===================================================================== */}
+      <section
+        aria-label="Indicadores clave de rendimiento"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+      >
+        {EXECUTIVE_KPIS.map((kpi) => (
+          <article
+            key={kpi.id}
+            className="p-4 rounded-lg bg-white border border-[#D5D2C8] shadow-2xs flex flex-col justify-between space-y-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-[#575653]">
+                {kpi.label}
+              </span>
+              <span
+                className={[
+                  'px-1.5 py-0.5 rounded text-[10px] font-mono metric-mono font-semibold border',
+                  kpi.deltaPositive
+                    ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                    : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]',
+                ].join(' ')}
+              >
+                {kpi.delta}
+              </span>
+            </div>
+
+            <div className="text-2xl font-bold font-mono metric-mono text-[#141413] tracking-tight">
+              {kpi.value}
+            </div>
+
+            <p className="text-[11px] text-[#8A8884] leading-snug">
+              {kpi.sublabel}
+            </p>
+          </article>
+        ))}
+      </section>
+
+      {/* =====================================================================
+          SECCIÓN CENTRAL: HORAS PICO WHATSAPP + PLATOS MÁS VENDIDOS POR LA IA
+      ===================================================================== */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1.15fr] gap-5">
+        {/* Panel Izquierdo: Curva de Horas Pico y Conversión en WhatsApp */}
+        <section className="p-5 rounded-lg bg-white border border-[#E8E6DF] shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Conversaciones Recientes en WhatsApp</CardTitle>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Clientes que han interactuado hoy con el agente o el equipo humano.
+              <h2 className="text-sm font-semibold text-[#141413]">
+                Horas Pico de Atención en WhatsApp
+              </h2>
+              <p className="text-[11px] text-[#575653]">
+                Volumen de chats vs. pedidos facturados por franja horaria
+              </p>
+            </div>
+            <span className="text-[11px] font-mono metric-mono px-2 py-0.5 rounded bg-[#FAF8F5] border border-[#E8E6DF] text-[#141413]">
+              Pico: 19:00 - 20:30
+            </span>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {HOURLY_WHATSAPP_TRAFFIC.map((slot) => {
+              const widthPercent = Math.round(
+                (slot.conversations / maxHourlyConversations) * 100
+              );
+              const conversionRate = Math.round(
+                (slot.ordersClosed / slot.conversations) * 100
+              );
+
+              return (
+                <div key={slot.hourLabel} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono metric-mono font-semibold text-[#141413] w-11">
+                        {slot.hourLabel}
+                      </span>
+                      {slot.isPeak && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono metric-mono font-semibold bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">
+                          HORA PICO
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 font-mono metric-mono text-[11px]">
+                      <span className="text-[#575653]">
+                        {slot.conversations} chats
+                      </span>
+                      <span className="text-[#065F46] font-semibold">
+                        → {slot.ordersClosed} pedidos ({conversionRate}%)
+                      </span>
+                      <span className="text-[#141413] font-semibold w-20 text-right">
+                        {formatCop(slot.revenueCop)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barra proporcional de tráfico */}
+                  <div className="w-full h-2 rounded-full bg-[#F3F1EC] overflow-hidden">
+                    <div
+                      className={[
+                        'h-full rounded-full transition-all duration-300',
+                        slot.isPeak ? 'bg-[#0F291E]' : 'bg-[#10B981]/75',
+                      ].join(' ')}
+                      style={{ width: `${widthPercent}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-3 rounded-md bg-[#FAF8F5] border border-[#E8E6DF] flex items-center justify-between text-xs">
+            <span className="text-[#575653]">
+              💡 <strong>Insight Operativo:</strong> El 58% de las ventas por
+              WhatsApp entran entre las 7:00 PM y 9:00 PM cuando la caja física
+              está más congestionada.
+            </span>
+          </div>
+        </section>
+
+        {/* Panel Derecho: Platos Estrella Vendidos por el Agente IA */}
+        <section className="p-5 rounded-lg bg-white border border-[#E8E6DF] shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-[#141413]">
+                Platos Más Vendidos por el Agente IA
+              </h2>
+              <p className="text-[11px] text-[#575653]">
+                Desempeño por corte, efectividad de maridaje y disponibilidad en
+                cocina
               </p>
             </div>
             <Link
-              href="/business/inbox"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              href="/business/orders"
+              className="text-xs font-medium text-[#0F291E] underline underline-offset-2"
             >
-              Ver bandeja completa <ArrowRight className="w-3.5 h-3.5" />
+              Gestionar agotados (86) →
             </Link>
           </div>
-        </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100 text-xs uppercase">
-              <tr>
-                <th className="px-6 py-3.5">Cliente</th>
-                <th className="px-6 py-3.5">Teléfono</th>
-                <th className="px-6 py-3.5">Último Mensaje</th>
-                <th className="px-6 py-3.5">Estado</th>
-                <th className="px-6 py-3.5">Hora</th>
-                <th className="px-6 py-3.5 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {recentConversations.map((chat) => (
-                <tr key={chat.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-900">
-                    {chat.customerName}
-                  </td>
-                  <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                    {chat.phone}
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 max-w-xs truncate">
-                    {chat.lastMessage}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge
-                      variant={
-                        chat.status === 'active'
-                          ? 'success'
-                          : chat.status === 'waiting_for_human'
-                          ? 'warning'
-                          : 'purple'
-                      }
-                    >
-                      {chat.statusLabel}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-slate-400">
-                    {chat.time}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      href="/business/inbox"
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-                    >
-                      Atender →
-                    </Link>
-                  </td>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#E8E6DF] text-[10px] font-semibold uppercase tracking-wider text-[#8A8884]">
+                  <th className="pb-2.5 pr-2">#</th>
+                  <th className="pb-2.5 px-2">Plato / Corte</th>
+                  <th className="pb-2.5 px-2">Upselling IA</th>
+                  <th className="pb-2.5 px-2 text-right">Unid.</th>
+                  <th className="pb-2.5 pl-2 text-right">Ventas COP</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody className="divide-y divide-[#E8E6DF] text-xs">
+                {TOP_AI_DISHES.map((dish) => (
+                  <tr
+                    key={dish.rank}
+                    className="hover:bg-[#FAF8F5]/80 transition-colors"
+                  >
+                    <td className="py-3 pr-2 font-mono metric-mono font-bold text-[#8A8884]">
+                      0{dish.rank}
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={[
+                            'font-semibold',
+                            dish.available
+                              ? 'text-[#141413]'
+                              : 'text-[#8A8884] line-through',
+                          ].join(' ')}
+                        >
+                          {dish.name}
+                        </span>
+                        {!dish.available && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono metric-mono font-semibold bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">
+                            86 · AGOTADO
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#8A8884] block">
+                        {dish.category}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className="px-2 py-0.5 rounded bg-[#EEF5F1] text-[#0F291E] border border-[#CDE2D6] font-mono metric-mono text-[10px] font-medium">
+                        {dish.upsellPairingRate}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono metric-mono font-semibold text-[#141413]">
+                      {dish.unitsSoldByAi}
+                    </td>
+                    <td className="py-3 pl-2 text-right font-mono metric-mono font-bold text-[#0F291E]">
+                      {formatCop(dish.revenueCop)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="pt-2 border-t border-[#E8E6DF] flex items-center justify-between text-xs text-[#575653]">
+            <span>
+              Ingresos adicionales generados solo por preguntas de maridaje:
+            </span>
+            <span className="font-mono metric-mono font-bold text-[#065F46]">
+              +$1.120.000 COP esta semana
+            </span>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

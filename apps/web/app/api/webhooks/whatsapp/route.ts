@@ -1,355 +1,679 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  WhatsAppSignatureValidator,
-  WhatsAppWebhookProcessor,
-  WhatsAppClient,
-  InMemoryTenantChannelRouter,
-  type ChannelConnectionInfo,
-} from '@platform/channels';
-import {
-  ConversationService,
-  InMemoryConversationRepository,
-  SlidingWindowRateLimiter,
-  TokenQuotaManager,
-  AuditLogger,
-  type Business,
-  type AgentConfig,
-} from '@platform/core';
-import { AIOrchestrator, PromptInjectionGuard } from '@platform/ai';
-import { ToolRegistry, registerDefaultTools } from '@platform/tools';
-import { createClient } from '@/lib/supabase/server';
+import crypto from 'crypto';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Router & Services
-const router = new InMemoryTenantChannelRouter();
-const repo = new InMemoryConversationRepository();
-const conversationService = new ConversationService(repo);
-const whatsappClient = new WhatsAppClient();
-const rateLimiter = new SlidingWindowRateLimiter();
-const quotaManager = new TokenQuotaManager();
-const auditLogger = new AuditLogger();
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-// Default pilot/demo connection for Restaurante Santa Cruz
-const pilotBusinessId = '00000000-0000-0000-0000-000000000001';
+// ============================================================================
+// TIPOS ESTRICTOS DEL PAYLOAD DE META WHATSAPP CLOUD API (CERO 'ANY')
+// ============================================================================
 
-router.registerConnection({
-  id: 'conn_santa_cruz_01',
-  businessId: pilotBusinessId,
-  channelType: 'whatsapp',
-  wabaId: process.env.WHATSAPP_WABA_ID || '109876543210987',
-  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '1412584025262699',
-  accessToken: process.env.WHATSAPP_SYSTEM_USER_TOKEN || process.env.META_ACCESS_TOKEN || 'EAAB_test_mock_token_v21',
-  billingType: 'client_direct_meta',
-  isActive: true,
-});
+interface WhatsAppTextObject {
+  body: string;
+}
 
-const defaultSantaCruzProducts = [
-  { id: 'p1', name: 'Parrillada Especial Santa Cruz', description: 'Punta de anca, pechuga, costillitas, chorizo artesanal, arepa de choclo y papas criollas.', price: 75000, category: 'Parrilla & Carnes' },
-  { id: 'p2', name: 'Churrasco a la Brasa 350g', description: 'Chatas maduradas al carbón con yuca y chimichurri casero.', price: 42000, category: 'Parrilla & Carnes' },
-  { id: 'p3', name: 'Bandeja Típica Santa Cruz', description: 'Fríjoles campesinos, arroz, carne molida en paila, chicharrón crocante y aguacate.', price: 36000, category: 'Platos Típicos' },
-  { id: 'p4', name: 'Costillas BBQ Ahumadas', description: 'Costillas tiernas en salsa BBQ artesanal con panela y papas a la francesa.', price: 38500, category: 'Parrilla & Carnes' },
-  { id: 'p5', name: 'Cazuela de Mariscos Tradicional', description: 'Camarones, calamares y filete en crema de coco y cilantro fresco.', price: 48000, category: 'Pescados & Mariscos' },
-  { id: 'p6', name: 'Picada Campesina Familiar', description: 'Lomo de cerdo, res, chicharrón, morcilla, plátano maduro con queso y arepitas.', price: 95000, category: 'Para Compartir' },
-  { id: 'p7', name: 'Jugo Natural en Fruta Fresca', description: 'Fruta 100% natural (Mango, Maracuyá, Lulo o Mora) en agua o leche.', price: 7500, category: 'Bebidas' },
-  { id: 'p8', name: 'Limonada de Coco Frappé', description: 'Leche de coco cremosa, jugo de limón fresco y menta.', price: 9500, category: 'Bebidas' },
-];
+interface WhatsAppInteractiveReply {
+  id: string;
+  title: string;
+  description?: string;
+}
 
-const processor = new WhatsAppWebhookProcessor({
-  router,
-  conversationService,
-  whatsappClient,
-  rateLimiter,
-  quotaManager,
-  auditLogger,
-  getMonthlyTokens: async (businessId: string) => {
-    return 250_000;
-  },
-  resolveCustomer: async ({ businessId, phone, displayName }) => {
-    return {
-      id: `cust_${phone.replace(/[^0-9]/g, '')}`,
+interface WhatsAppInteractiveObject {
+  type: 'button_reply' | 'list_reply';
+  button_reply?: WhatsAppInteractiveReply;
+  list_reply?: WhatsAppInteractiveReply;
+}
+
+interface WhatsAppIncomingMessage {
+  from: string;
+  id: string; // wamid único de Meta
+  timestamp: string;
+  type: 'text' | 'interactive' | 'audio' | 'image' | 'button' | 'unknown';
+  text?: WhatsAppTextObject;
+  interactive?: WhatsAppInteractiveObject;
+  button?: { text?: string; payload?: string };
+}
+
+interface WhatsAppContactProfile {
+  wa_id: string;
+  profile?: {
+    name?: string;
+  };
+}
+
+interface WhatsAppMetadata {
+  display_phone_number: string;
+  phone_number_id: string;
+}
+
+interface WhatsAppChangeValue {
+  messaging_product: 'whatsapp';
+  metadata: WhatsAppMetadata;
+  contacts?: WhatsAppContactProfile[];
+  messages?: WhatsAppIncomingMessage[];
+  statuses?: Array<{
+    id: string;
+    status: 'sent' | 'delivered' | 'read' | 'failed';
+    timestamp: string;
+    recipient_id: string;
+  }>;
+}
+
+interface WhatsAppWebhookEntry {
+  id: string;
+  changes: Array<{
+    field: string;
+    value: WhatsAppChangeValue;
+  }>;
+}
+
+interface WhatsAppWebhookPayload {
+  object: string;
+  entry?: WhatsAppWebhookEntry[];
+}
+
+// ============================================================================
+// TIPOS DE FILAS DE SUPABASE REQUERIDAS EN EL FLUJO
+// ============================================================================
+
+interface ChannelRecord {
+  id: string;
+  business_id: string;
+  phone_number_id: string;
+  access_token: string | null;
+  is_active: boolean;
+}
+
+interface BusinessQuotaRecord {
+  id: string;
+  name: string;
+  plan_tier?: 'trial' | 'despegue' | 'pro' | 'avanzado';
+  trial_ends_at?: string | null;
+  monthly_conversations_used?: number;
+  monthly_conversation_limit?: number;
+}
+
+interface ConversationRecord {
+  id: string;
+  business_id: string;
+  customer_id: string;
+  status: 'active' | 'human_handoff' | 'closed' | string;
+  ai_enabled: boolean;
+}
+
+interface MessageRecord {
+  id: string;
+  conversation_id: string;
+  sender_type: 'customer' | 'ai' | 'human' | 'system';
+  content: string;
+  created_at: string;
+  external_message_id?: string | null;
+}
+
+interface CatalogProductRecord {
+  name: string;
+  price: number;
+  is_available: boolean;
+  category?: string | null;
+}
+
+interface GeminiCandidatePart {
+  text?: string;
+}
+
+interface GeminiRestResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: GeminiCandidatePart[];
     };
-  },
-  aiResponder: async ({ userMessageText, customerName, businessId, conversationId }) => {
-    // 1. Prompt Injection & Jailbreak Defense
-    const guardCheck = PromptInjectionGuard.evaluate(userMessageText);
-    if (!guardCheck.isSafe) {
-      return {
-        replyText: guardCheck.neutralFallbackResponse,
-        inputTokens: 10,
-        outputTokens: 20,
-      };
+  }>;
+}
+
+// ============================================================================
+// CACHÉ DE IDEMPOTENCIA EN MEMORIA (PRIMERA BARRERA ULTRA RÁPIDA)
+// ============================================================================
+
+const PROCESSED_WAMIDS_CACHE = new Map<string, number>();
+const WAMID_TTL_MS = 1000 * 60 * 15; // 15 minutos
+const MESSAGE_BURST_DEBOUNCE_MS = 1800; // 1.8s para agrupar ráfagas de WhatsApp
+
+function isWamidRecentlyProcessed(wamid: string): boolean {
+  const now = Date.now();
+  for (const [key, timestamp] of PROCESSED_WAMIDS_CACHE.entries()) {
+    if (now - timestamp > WAMID_TTL_MS) {
+      PROCESSED_WAMIDS_CACHE.delete(key);
     }
+  }
+  if (PROCESSED_WAMIDS_CACHE.has(wamid)) {
+    return true;
+  }
+  PROCESSED_WAMIDS_CACHE.set(wamid, now);
+  return false;
+}
 
-    // 2. Fetch live products from Supabase
-    let products = defaultSantaCruzProducts.map((p) => ({ ...p, isAvailable: true }));
-    let businessName = 'Restaurante Santa Cruz';
+function getSupabaseAdminClient(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
 
-    try {
-      const supabase = await createClient();
-      const { data: dbProducts } = await supabase
-        .from('products')
-        .select('id, name, description, price, category, is_active, is_available, metadata')
-        .eq('business_id', businessId);
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
-      if (dbProducts && dbProducts.length > 0) {
-        products = dbProducts.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || '',
-          price: Number(p.price) || 0,
-          category: p.category || 'Parrilla',
-          isAvailable: p.is_available !== undefined ? Boolean(p.is_available) : Boolean(p.is_active),
-        }));
-      }
+function verifyMetaSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  appSecret: string | undefined
+): boolean {
+  if (!appSecret) {
+    // Si no se ha configurado WHATSAPP_APP_SECRET en desarrollo, permitir paso
+    return true;
+  }
+  if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
+    return false;
+  }
+  const expectedHash = crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody, 'utf8')
+    .digest('hex');
 
-      const { data: biz } = await supabase
-        .from('businesses')
-        .select('name')
-        .eq('id', businessId)
-        .maybeSingle();
+  const receivedHash = signatureHeader.slice('sha256='.length);
+  const expectedBuffer = Buffer.from(expectedHash, 'utf8');
+  const receivedBuffer = Buffer.from(receivedHash, 'utf8');
 
-      if (biz?.name) {
-        businessName = biz.name;
-      }
-    } catch {
-      // Fallback to local Santa Cruz catalog
-    }
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+}
 
-    // 3. If GEMINI_API_KEY is configured, execute Live AI Orchestrator
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        const toolRegistry = new ToolRegistry();
-        registerDefaultTools(toolRegistry);
+function extractMessageText(message: WhatsAppIncomingMessage): string | null {
+  if (message.type === 'text' && message.text?.body) {
+    return message.text.body.trim();
+  }
+  if (message.type === 'interactive' && message.interactive) {
+    return (
+      message.interactive.button_reply?.title ??
+      message.interactive.list_reply?.title ??
+      null
+    );
+  }
+  if (message.type === 'button' && message.button?.text) {
+    return message.button.text.trim();
+  }
+  return null;
+}
 
-        const currentBusiness: Business = {
-          id: businessId,
-          name: businessName,
-          description: 'Especialistas en carnes a la brasa, cortes madurados, gastronomía típica y eventos familiares.',
-          status: 'active',
-          timezone: 'America/Bogota',
-          business_hours: {
-            timezone: 'America/Bogota',
-            days: {
-              monday: { open: '11:30', close: '20:30', closed: false },
-              tuesday: { open: '11:30', close: '20:30', closed: false },
-              wednesday: { open: '11:30', close: '20:30', closed: false },
-              thursday: { open: '11:30', close: '21:00', closed: false },
-              friday: { open: '11:30', close: '22:00', closed: false },
-              saturday: { open: '11:00', close: '22:00', closed: false },
-              sunday: { open: '11:00', close: '20:30', closed: false },
-            },
-          },
-          location: {
-            address: 'Sede Campestre Km 4 Vía Principal',
-            city: 'Santa Cruz',
-            country: 'Colombia',
-          },
-          settings: {},
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
+// ============================================================================
+// GET: VERIFICACIÓN DEL WEBHOOK CON META CLOUD API
+// ============================================================================
 
-        const agentConfig: AgentConfig = {
-          id: 'cfg_live_wa',
-          agent_id: 'agent_wa_01',
-          version: 1,
-          industry: 'food_and_beverage',
-          system_instructions: `Eres "agilizio", el anfitrión y asistente virtual oficial de ${businessName} por WhatsApp. Atiende a ${customerName || 'nuestro comensal'} con calidez campesina, asesora sobre nuestros platos a la brasa, precios exactos en pesos colombianos y gestiona reservas de mesas y pedidos a domicilio.\n\nDIRECTRIZ CRÍTICA DE DISPONIBILIDAD: Recomienda proactivamente ÚNICAMENTE platos con is_available: true. Si el cliente pregunta específicamente por un plato que tenga is_available: false (marcado como agotado en la base de datos), infórmale amablemente que por hoy se encuentra agotado, y ofrécele de inmediato una alternativa disponible de la misma categoría.`,
-          personality: { tone: 'cálido, atento y profesional', language: 'es-CO' },
-          business_context: {
-            overview: 'Carnes a la brasa, cortes madurados, platos típicos colombianos y bebidas naturales.',
-            faq: [
-              { question: '¿Cómo reservo mesa?', answer: 'Indícanos fecha, hora y número de personas con al menos 2 horas de anticipación.' },
-              { question: '¿Horarios?', answer: 'Todos los días de 11:30 AM a 8:30 PM.' },
-            ],
-          },
-          policies: {
-            return_policy: 'Garantía de reposición inmediata en pedidos a domicilio.',
-            cancellation_policy: 'Reagendamiento o cancelación sin costo hasta 2 horas antes de la reserva.',
-          },
-          few_shot_examples: [],
-          enabled_tools: ['search_products', 'calculate_order', 'check_availability', 'get_business_information'],
-          model_config: { provider: 'gemini', model: 'gemini-3.5-flash', temperature: 0.7 },
-          out_of_hours_behavior: 'bot_responds',
-          human_handoff_trigger: 'Solicitud explícita de hablar con un encargado o quejas',
-          is_active: true,
-          created_at: new Date().toISOString(),
-        };
-
-        const toolExecutor = async (name: string, args: Record<string, unknown>) => {
-          if (name === 'search_products') {
-            const query = typeof args.query === 'string' ? args.query.toLowerCase().trim() : '';
-            const queryTokens = query.split(/[^a-záéíóú0-9]+/i).filter((w) => w.length > 2);
-            const filtered = products.filter((p) => {
-              if (!query || queryTokens.length === 0) return true;
-              const target = `${p.name} ${p.description} ${p.category}`.toLowerCase();
-              return queryTokens.some((token) => target.includes(token));
-            });
-            const results = filtered.length > 0 ? filtered : products;
-            return {
-              found_count: results.length,
-              products: results.map((p: any) => ({
-                name: p.name,
-                price: p.price,
-                description: p.description,
-                category: p.category,
-                is_available: p.isAvailable !== undefined ? p.isAvailable : true,
-              })),
-            };
-          }
-          if (name === 'get_business_information') {
-            return {
-              business_name: businessName,
-              address: 'Km 4 Vía Principal, Santa Cruz',
-              horarios: 'Lunes a Domingo de 11:30 AM a 8:30 PM',
-              medios_de_pago: 'Nequi, Daviplata, Bancolombia, efectivo y tarjetas',
-            };
-          }
-          return { status: 'executed', tool: name, args };
-        };
-
-        const orchestrator = new AIOrchestrator();
-        const aiResult = await orchestrator.processMessage({
-          business: currentBusiness,
-          agentConfig,
-          agentName: 'agilizio',
-          conversationId,
-          history: [],
-          incomingUserText: userMessageText,
-          availableTools: toolRegistry.exportDeclarations(agentConfig.enabled_tools),
-          toolExecutor,
-          maxToolIterations: 3,
-        });
-
-        if (aiResult.text) {
-          return {
-            replyText: aiResult.text,
-            toolCallsExecuted: aiResult.toolCallsExecuted?.map((t) => t.name),
-            inputTokens: aiResult.usage.inputTokens,
-            outputTokens: aiResult.usage.outputTokens,
-          };
-        }
-      } catch (err: any) {
-        console.warn('Live AI WhatsApp error, using resilient responder:', err?.message);
-      }
-    }
-
-    // 4. Resilient Fallback Responder for WhatsApp
-    const query = userMessageText.toLowerCase();
-    const greeting = customerName ? `¡Hola ${customerName}!` : '¡Hola!';
-
-    if (
-      query.includes('menu') ||
-      query.includes('plato') ||
-      query.includes('carta') ||
-      query.includes('carne') ||
-      query.includes('churrasco') ||
-      query.includes('parrilla') ||
-      query.includes('bandeja') ||
-      query.includes('comida') ||
-      query.includes('almorzar')
-    ) {
-      const availableItems = products.filter((p: any) => p.isAvailable !== false);
-      const listToSample = availableItems.length > 0 ? availableItems : products;
-      const sample = listToSample.slice(0, 3).map((p) => `• *${p.name}* — $${p.price.toLocaleString('es-CO')}`).join('\n');
-
-      const unavailableMatch = products.find(
-        (p: any) => p.isAvailable === false && query.includes(p.name.toLowerCase().split(' ')[0] || '')
-      );
-
-      if (unavailableMatch) {
-        return {
-          replyText: `${greeting} Lamentablemente por el día de hoy nuestro plato *${unavailableMatch.name}* se encuentra *agotado*.\n\nSin embargo, te recomiendo nuestras especialidades listas en la parrilla:\n${sample}\n\n¿Te gustaría ordenar alguna de ellas o prefieres que reservemos una mesa?`,
-          inputTokens: 25,
-          outputTokens: 75,
-        };
-      }
-
-      return {
-        replyText: `${greeting} Bienvenido a *${businessName}* 🥩🔥\n\nNuestras recomendaciones de la parrilla hoy:\n${sample}\n\n¿Te gustaría ordenar a domicilio o prefieres que te reservemos una mesa?`,
-        inputTokens: 25,
-        outputTokens: 70,
-      };
-    }
-
-    if (query.includes('reserva') || query.includes('mesa') || query.includes('hora') || query.includes('evento')) {
-      return {
-        replyText: `${greeting} ¡Con gusto coordinamos tu mesa en *${businessName}*! 🌿🍽️\n\nPor favor indícanos:\n1. Día y hora de llegada\n2. Número de personas\n3. Si celebras alguna ocasión especial (cumpleaños, aniversario)`,
-        inputTokens: 20,
-        outputTokens: 50,
-      };
-    }
-
-    return {
-      replyText: `${greeting} Soy *agilizio*, el asistente virtual oficial de *${businessName}*. Te puedo ayudar con nuestra carta de carnes a la brasa, precios, reservas de mesas y pedidos a domicilio. ¿En qué te puedo colaborar hoy?`,
-      inputTokens: 15,
-      outputTokens: 45,
-    };
-  },
-});
-
-/**
- * GET /api/webhooks/whatsapp
- * Meta Webhook Handshake Verification
- */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const searchParams = request.nextUrl.searchParams;
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken =
-    process.env.WHATSAPP_VERIFY_TOKEN ||
-    process.env.META_WEBHOOK_VERIFY_TOKEN ||
-    'platform_verify_secret_token';
+  const expectedVerifyToken =
+    process.env.WHATSAPP_VERIFY_TOKEN ?? 'agilizio_verify_token';
 
-  const verification = WhatsAppSignatureValidator.verifyHandshake({
-    mode,
-    verifyToken: token,
-    expectedToken,
-    challenge,
-  });
-
-  if (verification.isValid && verification.challenge) {
-    return new Response(verification.challenge, {
+  if (mode === 'subscribe' && token === expectedVerifyToken && challenge) {
+    return new NextResponse(challenge, {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
     });
   }
 
-  return new Response('Verification failed', { status: 403 });
+  return NextResponse.json(
+    { error: 'Token de verificación de WhatsApp inválido' },
+    { status: 403 }
+  );
 }
 
-/**
- * POST /api/webhooks/whatsapp
- * Meta Cloud API Ingestion Endpoint
- */
-export async function POST(request: NextRequest) {
+// ============================================================================
+// POST: RECEPCIÓN IDEMPOTENTE, CONSOLIDACIÓN DE RÁFAGAS Y GUARDIA DE HANDOFF
+// ============================================================================
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  let rawBody = '';
   try {
-    const rawBody = await request.text();
-    const signature = request.headers.get('x-hub-signature-256');
-    const appSecret =
-      process.env.WHATSAPP_APP_SECRET ||
-      process.env.META_APP_SECRET ||
-      'test_meta_app_secret_123';
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
 
-    const skipCheck = process.env.NODE_ENV === 'test' && !signature;
+  // 1. Validar firma criptográfica X-Hub-Signature-256
+  const signature = request.headers.get('x-hub-signature-256');
+  const isSignatureValid = verifyMetaSignature(
+    rawBody,
+    signature,
+    process.env.WHATSAPP_APP_SECRET
+  );
 
-    const result = await processor.process({
-      rawBody,
-      signatureHeader: signature,
-      appSecret,
-      skipSignatureCheck: skipCheck,
-    });
-
-    return NextResponse.json(result, { status: result.statusCode });
-  } catch (error: any) {
+  if (!isSignatureValid) {
     return NextResponse.json(
-      {
-        success: false,
-        action: 'error',
-        error: error?.message || 'Internal server error processing webhook',
-      },
-      { status: 500 }
+      { error: 'Firma X-Hub-Signature-256 inválida' },
+      { status: 401 }
     );
   }
+
+  let payload: WhatsAppWebhookPayload;
+  try {
+    payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
+  } catch {
+    return NextResponse.json({ error: 'JSON malformado' }, { status: 400 });
+  }
+
+  const changeValue = payload.entry?.[0]?.changes?.[0]?.value;
+  if (!changeValue) {
+    return NextResponse.json({ status: 'ignored_no_changes' }, { status: 200 });
+  }
+
+  // Ignorar silenciosamente eventos de estado (sent, delivered, read)
+  if (!changeValue.messages || changeValue.messages.length === 0) {
+    return NextResponse.json({ status: 'status_update_ack' }, { status: 200 });
+  }
+
+  const incomingMessage = changeValue.messages[0];
+  const wamid = incomingMessage.id;
+  const customerPhone = incomingMessage.from;
+  const customerName =
+    changeValue.contacts?.[0]?.profile?.name ?? `Cliente ${customerPhone.slice(-4)}`;
+  const phoneNumberId = changeValue.metadata.phone_number_id;
+  const incomingText = extractMessageText(incomingMessage);
+
+  if (!incomingText) {
+    return NextResponse.json(
+      { status: 'unsupported_message_type_ack', wamid },
+      { status: 200 }
+    );
+  }
+
+  // 2. PRIMERA BARRERA DE IDEMPOTENCIA (Caché en memoria)
+  if (isWamidRecentlyProcessed(wamid)) {
+    return NextResponse.json(
+      { status: 'duplicate_wamid_cached', wamid },
+      { status: 200 }
+    );
+  }
+
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { status: 'ack_missing_supabase_env', wamid },
+      { status: 200 }
+    );
+  }
+
+  try {
+    // 3. RESOLVER EL TENANT (RESTAURANTE) POR EL PHONE_NUMBER_ID DE META
+    const { data: channelData } = await supabase
+      .from('channels')
+      .select('id, business_id, phone_number_id, access_token, is_active')
+      .eq('phone_number_id', phoneNumberId)
+      .eq('is_active', true)
+      .maybeSingle<ChannelRecord>();
+
+    if (!channelData) {
+      return NextResponse.json(
+        { status: 'unregistered_channel_ack', phoneNumberId },
+        { status: 200 }
+      );
+    }
+
+    const businessId = channelData.business_id;
+
+    // 4. OBTENER O CREAR EL COMENSAL Y LA CONVERSACIÓN ACTIVA
+    const { data: existingCustomer } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('phone', customerPhone)
+      .maybeSingle<{ id: string }>();
+
+    let customerId = existingCustomer?.id;
+    if (!customerId) {
+      const { data: createdCustomer } = await supabase
+        .from('customers')
+        .insert({
+          business_id: businessId,
+          phone: customerPhone,
+          name: customerName,
+        })
+        .select('id')
+        .single<{ id: string }>();
+      customerId = createdCustomer?.id;
+    }
+
+    if (!customerId) {
+      return NextResponse.json(
+        { status: 'customer_creation_failed_ack' },
+        { status: 200 }
+      );
+    }
+
+    const { data: existingConv } = await supabase
+      .from('conversations')
+      .select('id, business_id, customer_id, status, ai_enabled')
+      .eq('business_id', businessId)
+      .eq('customer_id', customerId)
+      .neq('status', 'closed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<ConversationRecord>();
+
+    let conversation = existingConv;
+    if (!conversation) {
+      const { data: createdConv } = await supabase
+        .from('conversations')
+        .insert({
+          business_id: businessId,
+          customer_id: customerId,
+          channel_id: channelData.id,
+          status: 'active',
+          ai_enabled: true,
+        })
+        .select('id, business_id, customer_id, status, ai_enabled')
+        .single<ConversationRecord>();
+      conversation = createdConv;
+    }
+
+    if (!conversation) {
+      return NextResponse.json(
+        { status: 'conversation_init_failed_ack' },
+        { status: 200 }
+      );
+    }
+
+    // 5. SEGUNDA BARRERA DE IDEMPOTENCIA ATÓMICA EN BASE DE DATOS
+    const messageTimestampIso = new Date().toISOString();
+    const { data: insertedMessage, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        business_id: businessId,
+        conversation_id: conversation.id,
+        sender_type: 'customer',
+        content: incomingText,
+        external_message_id: wamid,
+        created_at: messageTimestampIso,
+      })
+      .select('id, created_at')
+      .maybeSingle<{ id: string; created_at: string }>();
+
+    // Código PostgreSQL 23505 = unique_violation (Meta reintentó el mismo wamid)
+    if (insertError?.code === '23505') {
+      return NextResponse.json(
+        { status: 'duplicate_wamid_db_locked', wamid },
+        { status: 200 }
+      );
+    }
+
+    const currentMessageCreatedAt =
+      insertedMessage?.created_at ?? messageTimestampIso;
+
+    // 6. VERIFICACIÓN TEMPRANA DE HANDOFF HUMANO (PRE-INFERENCIA)
+    if (
+      conversation.status === 'human_handoff' ||
+      conversation.ai_enabled === false
+    ) {
+      return NextResponse.json(
+        {
+          status: 'skipped_human_handoff_active',
+          conversationId: conversation.id,
+        },
+        { status: 200 }
+      );
+    }
+
+    // 7. CONTROL DE RÁFAGAS DE MENSAJES (DEBOUNCING COORDINADO EN POSTGRESQL)
+    // Esperamos 1.8s por si el comensal está escribiendo en múltiples burbujas seguidas
+    await new Promise((resolve) =>
+      setTimeout(resolve, MESSAGE_BURST_DEBOUNCE_MS)
+    );
+
+    const { data: newerCustomerMessages } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('conversation_id', conversation.id)
+      .eq('sender_type', 'customer')
+      .gt('created_at', currentMessageCreatedAt)
+      .limit(1);
+
+    if (newerCustomerMessages && newerCustomerMessages.length > 0) {
+      // Entró otro mensaje más reciente del usuario durante la ventana de 1.8s.
+      // Abortamos esta ejecución para que la última invocación responda todo junto.
+      return NextResponse.json(
+        {
+          status: 'coalesced_into_newer_message_burst',
+          wamid,
+        },
+        { status: 200 }
+      );
+    }
+
+    // 8. VERIFICAR CUOTA Y ESTADO DE REVERSE TRIAL DEL RESTAURANTE
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select(
+        'id, name, plan_tier, trial_ends_at, monthly_conversations_used, monthly_conversation_limit'
+      )
+      .eq('id', businessId)
+      .maybeSingle<BusinessQuotaRecord>();
+
+    if (
+      businessData?.plan_tier === 'trial' &&
+      businessData.trial_ends_at &&
+      new Date(businessData.trial_ends_at).getTime() < Date.now()
+    ) {
+      // Trial expirado: pasamos a Handoff suave sin perder el mensaje en bandeja
+      await supabase
+        .from('conversations')
+        .update({ status: 'human_handoff', ai_enabled: false })
+        .eq('id', conversation.id);
+
+      return NextResponse.json(
+        { status: 'trial_expired_routed_to_inbox' },
+        { status: 200 }
+      );
+    }
+
+    // 9. CARGAR CONTEXTO RECIENTE (CONCATENANDO RÁFAGA) + MENÚ DISPONIBLE (RESPETANDO 86)
+    const [{ data: recentMessages }, { data: catalogItems }] =
+      await Promise.all([
+        supabase
+          .from('messages')
+          .select('id, conversation_id, sender_type, content, created_at')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(10)
+          .returns<MessageRecord[]>(),
+        supabase
+          .from('products')
+          .select('name, price, is_available, category')
+          .eq('business_id', businessId)
+          .returns<CatalogProductRecord[]>(),
+      ]);
+
+    const orderedHistory = (recentMessages ?? []).reverse();
+    const availableMenuText = (catalogItems ?? [])
+      .filter((p) => p.is_available)
+      .map((p) => `- ${p.name}: $${p.price.toLocaleString('es-CO')} COP`)
+      .join('\n');
+
+    const soldOutMenuText = (catalogItems ?? [])
+      .filter((p) => !p.is_available)
+      .map((p) => p.name)
+      .join(', ');
+
+    // 10. GENERAR RESPUESTA CON GEMINI 2.5 FLASH
+    const aiReplyText = await generateRestaurantAiReply({
+      businessName: businessData?.name ?? 'Restaurante Aliado',
+      customerName,
+      availableMenuText,
+      soldOutMenuText,
+      history: orderedHistory,
+    });
+
+    // 11. GUARDIÁN POST-INFERENCIA CRÍTICO (EVITA RACE CONDITION CON EL CAJERO)
+    // Re-consultamos el estado exacto de la conversación antes de disparar a WhatsApp
+    const { data: freshConvState } = await supabase
+      .from('conversations')
+      .select('status, ai_enabled')
+      .eq('id', conversation.id)
+      .maybeSingle<{ status: string; ai_enabled: boolean }>();
+
+    if (
+      freshConvState?.status === 'human_handoff' ||
+      freshConvState?.ai_enabled === false
+    ) {
+      return NextResponse.json(
+        {
+          status: 'aborted_post_inference_human_intervened',
+          conversationId: conversation.id,
+        },
+        { status: 200 }
+      );
+    }
+
+    // 12. PERSISTIR RESPUESTA DE LA IA Y ENVIAR A META CLOUD API
+    await supabase.from('messages').insert({
+      business_id: businessId,
+      conversation_id: conversation.id,
+      sender_type: 'ai',
+      content: aiReplyText,
+    });
+
+    const metaAccessToken =
+      channelData.access_token ?? process.env.WHATSAPP_ACCESS_TOKEN;
+
+    if (metaAccessToken) {
+      await dispatchWhatsAppTextMessage({
+        phoneNumberId,
+        accessToken: metaAccessToken,
+        recipientPhone: customerPhone,
+        text: aiReplyText,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        status: 'dispatched_ai_reply',
+        wamid,
+        conversationId: conversation.id,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Error interno en webhook';
+    // Siempre devolvemos 200 OK ante errores de lógica interna para evitar tormentas de reintentos de Meta
+    return NextResponse.json(
+      { status: 'handled_error_ack', detail: errorMessage },
+      { status: 200 }
+    );
+  }
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES: GEMINI 2.5 FLASH Y DESPACHO META GRAPH API
+// ============================================================================
+
+async function generateRestaurantAiReply(params: {
+  businessName: string;
+  customerName: string;
+  availableMenuText: string;
+  soldOutMenuText: string;
+  history: MessageRecord[];
+}): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const conversationTranscript = params.history
+    .map(
+      (m) =>
+        `${m.sender_type === 'customer' ? 'Comensal' : 'Agente'}: ${m.content}`
+    )
+    .join('\n');
+
+  const systemPrompt = [
+    `Eres el anfitrión y recepcionista experto de ${params.businessName} en WhatsApp.`,
+    `Atiendes a ${params.customerName} con hospitalidad gastronómica, respuestas concisas y enfoque en cierre de pedido.`,
+    `Si pide cortes de res, pregunta siempre término de cocción (1/2, 3/4, bien asado) y guarnición.`,
+    params.availableMenuText
+      ? `MENÚ DISPONIBLE HOY:\n${params.availableMenuText}`
+      : '',
+    params.soldOutMenuText
+      ? `PLATOS AGOTADOS HOY (86 - NO OFRECER): ${params.soldOutMenuText}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  if (!apiKey) {
+    return `¡Hola ${params.customerName}! Bienvenido a ${params.businessName}. ¿Qué corte o plato te gustaría pedir hoy y para qué barrio va tu domicilio?`;
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `Historial reciente de la conversación (si el cliente envió varios mensajes seguidos, responde a todos en un solo mensaje coherente):\n${conversationTranscript}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 320,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    return `¡Hola ${params.customerName}! Estamos tomando tu pedido en ${params.businessName}. ¿Me confirmas por favor tus platos y dirección de entrega?`;
+  }
+
+  const data = (await response.json()) as GeminiRestResponse;
+  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+  return (
+    reply ??
+    `¡Con gusto, ${params.customerName}! ¿Me confirmas por favor el término de tu corte y tu dirección para registrar la comanda?`
+  );
+}
+
+async function dispatchWhatsAppTextMessage(params: {
+  phoneNumberId: string;
+  accessToken: string;
+  recipientPhone: string;
+  text: string;
+}): Promise<void> {
+  await fetch(
+    `https://graph.facebook.com/v21.0/${params.phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: params.recipientPhone,
+        type: 'text',
+        text: { preview_url: false, body: params.text },
+      }),
+    }
+  );
 }

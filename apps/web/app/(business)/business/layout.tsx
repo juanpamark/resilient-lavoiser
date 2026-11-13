@@ -107,6 +107,7 @@ export default function BusinessLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState<boolean>(false);
 
   const conversationsUsed = 412;
   const conversationsLimit = 1000;
@@ -117,8 +118,26 @@ export default function BusinessLayout({
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#FAF8F5] text-[#141413] antialiased">
-      {/* SIDEBAR EN VERDE BOSQUE NOCTURNO (#0C1F17) - ANCHO FIJO 240PX */}
-      <aside className="w-60 shrink-0 bg-[#0C1F17] text-[#E6E4DD] border-r border-white/[0.08] flex flex-col justify-between select-none">
+      {/* =====================================================================
+          DRAWER MÓVIL EN PANTALLAS PEQUEÑAS (< LG)
+      ===================================================================== */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* =====================================================================
+          SIDEBAR EN VERDE BOSQUE NOCTURNO (#0C1F17) - FIJO EN DESKTOP (W-60)
+          RESPONSIVO EN MÓVIL COMO DRAWER DESLIZABLE
+      ===================================================================== */}
+      <aside
+        className={[
+          'fixed lg:static inset-y-0 left-0 z-50 w-60 shrink-0 bg-[#0C1F17] text-[#E6E4DD] border-r border-white/[0.08] flex flex-col justify-between select-none transition-transform duration-200 ease-in-out',
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        ].join(' ')}
+      >
         {/* Cabecera de Marca + Salud Operativa del Restaurante */}
         <div className="p-3.5 space-y-3">
           <div className="flex items-center justify-between px-1.5">
@@ -130,9 +149,19 @@ export default function BusinessLayout({
                 agilizio
               </span>
             </div>
-            <span className="text-[10px] font-mono metric-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.07] text-[#A7F3D0] border border-white/[0.08]">
-              v2.4
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-mono metric-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.07] text-[#A7F3D0] border border-white/[0.08]">
+                v2.4
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="lg:hidden h-6 w-6 rounded flex items-center justify-center text-white/70 hover:text-white"
+                aria-label="Cerrar menú"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Widget de Salud Operativa del Tenant */}
@@ -171,6 +200,7 @@ export default function BusinessLayout({
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={[
                     'group relative flex items-center justify-between h-9 px-2.5 rounded-md text-[13px] transition-all duration-150',
                     isActive
@@ -263,38 +293,50 @@ export default function BusinessLayout({
         </div>
       </aside>
 
-      {/* LIENZO PRINCIPAL (WARM IVORY #FAF8F5) */}
+      {/* =====================================================================
+          LIENZO PRINCIPAL (WARM IVORY #FAF8F5)
+      ===================================================================== */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* BANNER SUPERIOR DE REVERSE TRIAL (14 DÍAS SIN TARJETA) */}
-        <header className="h-10 shrink-0 bg-[#F3F1EC] border-b border-[#E8E6DF] px-4 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2.5 truncate">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono metric-mono font-semibold bg-[#0F291E] text-[#FAF8F5]">
-              REVERSE TRIAL
-            </span>
-            <p className="text-[#141413] font-medium truncate">
-              Te quedan{' '}
-              <span className="font-mono metric-mono font-semibold underline decoration-[#D97706] underline-offset-2">
-                11 días de prueba Pro
-              </span>{' '}
-              · Sin tarjeta
-            </p>
-            <span className="hidden md:inline text-[#8A8884]" aria-hidden="true">
-              |
-            </span>
-            <p className="hidden md:inline text-[#575653] truncate">
-              Ventas asistidas por IA esta semana:{' '}
-              <span className="font-mono metric-mono font-semibold text-[#0F291E]">
-                $1.840.000 COP
-              </span>{' '}
-              (28 pedidos)
-            </p>
+        {/* BARRA SUPERIOR MÓVIL (< LG) */}
+        <div className="lg:hidden h-12 bg-[#0C1F17] text-white px-4 flex items-center justify-between border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center text-white text-base cursor-pointer"
+              aria-label="Abrir menú"
+            >
+              ☰
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded bg-[#10B981] text-[#0C1F17] font-bold text-[11px] flex items-center justify-center">
+                A
+              </div>
+              <span className="font-semibold text-xs tracking-tight">agilizio</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="primary" size="xs">
-              Activar Plan Despegue ($190.000/mes)
-            </Button>
+          <span className="text-[11px] font-mono metric-mono text-[#A7F3D0]">
+            Santa Cruz · 98ms
+          </span>
+        </div>
+
+        {/* BANNER SUPERIOR DE REVERSE TRIAL (SIMPLIFICADO Y LIMPIO) */}
+        <header className="h-9 shrink-0 bg-[#F3F1EC] border-b border-[#E8E6DF] px-4 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono metric-mono font-semibold bg-[#0F291E] text-[#FAF8F5]">
+              TRIAL PRO
+            </span>
+            <span className="text-[#141413] font-medium text-[11px] sm:text-xs">
+              <strong className="font-mono metric-mono">11 días restantes</strong> · Sin tarjeta
+            </span>
           </div>
+
+          <Link href="/business/channels">
+            <Button variant="primary" size="xs">
+              Activar Plan ($190k)
+            </Button>
+          </Link>
         </header>
 
         {/* CONTENEDOR DE PÁGINA */}

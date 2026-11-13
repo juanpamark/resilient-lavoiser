@@ -265,6 +265,8 @@ export default function BusinessInboxPage() {
   const [filter, setFilter] = React.useState<InboxFilter>('all');
   const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [draftMessage, setDraftMessage] = React.useState<string>('');
+  const [sendAsRole, setSendAsRole] = React.useState<'staff' | 'simulate_customer'>('simulate_customer');
+  const [isAiReplying, setIsAiReplying] = React.useState<boolean>(false);
   const [notesSavedIndicator, setNotesSavedIndicator] =
     React.useState<boolean>(false);
 
@@ -335,11 +337,11 @@ export default function BusinessInboxPage() {
     );
   };
 
-  // Enviar mensaje como cajero/humano
-  const handleSendHumanMessage = (event: React.FormEvent<HTMLFormElement>) => {
+  // Enviar mensaje: como cajero O como cliente simulado que activa la IA
+  const handleSendMessage = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = draftMessage.trim();
-    if (!trimmed || !selectedConversation) return;
+    if (!trimmed || !selectedConversation || isAiReplying) return;
 
     const nowTime = new Date().toLocaleTimeString('es-CO', {
       hour: '2-digit',
@@ -347,30 +349,131 @@ export default function BusinessInboxPage() {
       hour12: false,
     });
 
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: 'human_staff',
-      authorName: 'Don Andrés (Cajero)',
-      text: trimmed,
-      timestamp: nowTime,
-    };
+    if (sendAsRole === 'staff') {
+      // MODO CAJERO: Se envía como staff y pasa a handoff humano
+      const newMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sender: 'human_staff',
+        authorName: 'Don Andrés (Cajero)',
+        text: trimmed,
+        timestamp: nowTime,
+      };
 
-    setConversations((prev) =>
-      prev.map((conv) => {
-        if (conv.id !== selectedConversation.id) return conv;
-        // Si estaba en IA, al enviar mensaje humano se pasa a Handoff automáticamente
-        return {
-          ...conv,
-          mode: 'human_handoff',
-          lastMessagePreview: trimmed,
-          lastActivityTime: 'Ahora',
-          unreadCount: 0,
-          messages: [...conv.messages, newMessage],
-        };
-      })
-    );
+      setConversations((prev) =>
+        prev.map((conv) => {
+          if (conv.id !== selectedConversation.id) return conv;
+          return {
+            ...conv,
+            mode: 'human_handoff',
+            lastMessagePreview: trimmed,
+            lastActivityTime: 'Ahora',
+            unreadCount: 0,
+            messages: [...conv.messages, newMessage],
+          };
+        })
+      );
+      setDraftMessage('');
+    } else {
+      // MODO SIMULAR CLIENTE (PROBAR IA): Se envía como customer y dispara a Gemini
+      const customerMsg: ChatMessage = {
+        id: `cust-${Date.now()}`,
+        sender: 'customer',
+        authorName: selectedConversation.customerName,
+        text: trimmed,
+        timestamp: nowTime,
+      };
 
-    setDraftMessage('');
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === selectedConversation.id
+            ? {
+                ...conv,
+                mode: 'ai_active',
+                lastMessagePreview: trimmed,
+                lastActivityTime: 'Ahora',
+                messages: [...conv.messages, customerMsg],
+              }
+            : conv
+        )
+      );
+
+      setDraftMessage('');
+      setIsAiReplying(true);
+
+      const startTime = performance.now();
+
+      try {
+        const res = await fetch('/api/agent/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: trimmed,
+            history: selectedConversation.messages.slice(-4).map((m) => ({
+              role: m.sender === 'customer' ? 'customer' : 'agent',
+              content: m.text,
+            })),
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const aiReplyText = data.reply || data.text || data.message;
+          if (aiReplyText) {
+            const elapsed = Math.round(performance.now() - startTime);
+            const aiMsg: ChatMessage = {
+              id: `ai-${Date.now()}`,
+              sender: 'ai_agent',
+              authorName: 'Agente Agilizio',
+              text: aiReplyText,
+              timestamp: nowTime,
+              latencyMs: data.latencyMs ?? elapsed,
+              toolExecuted: data.toolsUsed?.[0] ?? 'search_catalog()',
+            };
+
+            setConversations((prev) =>
+              prev.map((conv) =>
+                conv.id === selectedConversation.id
+                  ? {
+                      ...conv,
+                      lastMessagePreview: aiReplyText,
+                      messages: [...conv.messages, aiMsg],
+                    }
+                  : conv
+              )
+            );
+            setIsAiReplying(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Simulate failed, using fallback:', e);
+      }
+
+      // Fallback si falla la llamada
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const fallbackAiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai_agent',
+        authorName: 'Agente Agilizio',
+        text: `¡Hola ${selectedConversation.customerName}! Con gusto te atendemos en Santa Cruz Parrilla. ¿Te gustaría ordenar nuestra Punta de Anca madurada o prefieres consultar la carta de cortes al carbón?`,
+        timestamp: nowTime,
+        latencyMs: 950,
+        toolExecuted: 'search_catalog()',
+      };
+
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === selectedConversation.id
+            ? {
+                ...conv,
+                lastMessagePreview: fallbackAiMsg.text,
+                messages: [...conv.messages, fallbackAiMsg],
+              }
+            : conv
+        )
+      );
+      setIsAiReplying(false);
+    }
   };
 
   // Alternar etiquetas operativas en el Mini-CRM
@@ -415,60 +518,50 @@ export default function BusinessInboxPage() {
   const isAiActive = selectedConversation.mode === 'ai_active';
 
   return (
-    <div className="grid grid-cols-[320px_1fr_300px] h-full w-full overflow-hidden bg-[#FAF8F5]">
+    <div className="grid grid-cols-[280px_1fr] lg:grid-cols-[300px_1fr_280px] h-full w-full overflow-hidden bg-[#FAF8F5]">
       {/* =====================================================================
-          COLUMNA 1: LISTA DE CHATS Y FILTROS OPERATIVOS (320px FIJOS)
+          COLUMNA 1: LISTA DE CHATS Y FILTROS OPERATIVOS (300px)
       ===================================================================== */}
       <section
         aria-label="Lista de conversaciones"
-        className="w-[320px] h-full border-r border-[#E8E6DF] bg-[#FAF8F5] flex flex-col overflow-hidden select-none"
+        className="w-[280px] lg:w-[300px] h-full border-r border-[#E8E6DF] bg-[#FAF8F5] flex flex-col overflow-hidden select-none shrink-0"
       >
         {/* Cabecera de Columna 1: Buscador + Segmented Control */}
-        <div className="p-3 border-b border-[#E8E6DF] bg-white space-y-2.5 shrink-0">
+        <div className="p-3 border-b border-[#E8E6DF] bg-white space-y-2 shrink-0">
           <div className="flex items-center justify-between">
-            <h1 className="text-sm font-semibold text-[#141413] tracking-[-0.01em]">
+            <h1 className="text-xs font-semibold text-[#141413] tracking-tight">
               Bandeja de Entrada
             </h1>
-            <span className="text-[11px] font-mono metric-mono text-[#8A8884]">
+            <span className="text-[10px] font-mono metric-mono text-[#8A8884]">
               En vivo · WABA
             </span>
           </div>
 
           {/* Buscador compacto */}
           <div className="relative">
-            <svg
-              className="w-3.5 h-3.5 text-[#8A8884] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar cliente, +57 o #ORD..."
-              className="w-full h-8 pl-8 pr-2.5 text-xs bg-[#FAF8F5] border border-[#D5D2C8] rounded-md text-[#141413] placeholder:text-[#8A8884] focus:outline-none focus:bg-white focus:border-[#0F291E] transition-colors"
+              className="w-full h-7 px-2.5 text-xs bg-[#FAF8F5] border border-[#D5D2C8] rounded-md text-[#141413] placeholder:text-[#8A8884] focus:outline-none focus:bg-white focus:border-[#0F291E]"
             />
           </div>
 
           {/* Segmented Control: Todos | 🔥 Humano | 🤖 IA */}
-          <div className="grid grid-cols-3 p-0.5 bg-[#F3F1EC] rounded-md border border-[#E8E6DF]">
+          <div className="grid grid-cols-3 p-0.5 bg-[#F3F1EC] rounded border border-[#E8E6DF]">
             <button
               type="button"
               onClick={() => setFilter('all')}
               className={[
-                'h-7 rounded text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer',
+                'h-6 rounded text-[10px] font-medium transition flex items-center justify-center gap-0.5 cursor-pointer',
                 filter === 'all'
                   ? 'bg-white text-[#141413] shadow-2xs font-semibold'
-                  : 'text-[#575653] hover:text-[#141413]',
+                  : 'text-[#575653]',
               ].join(' ')}
             >
               <span>Todos</span>
-              <span className="font-mono metric-mono text-[10px] text-[#8A8884]">
+              <span className="font-mono metric-mono text-[9px] text-[#8A8884]">
                 ({counts.all})
               </span>
             </button>
@@ -477,14 +570,14 @@ export default function BusinessInboxPage() {
               type="button"
               onClick={() => setFilter('human_handoff')}
               className={[
-                'h-7 rounded text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer',
+                'h-6 rounded text-[10px] font-medium transition flex items-center justify-center gap-0.5 cursor-pointer',
                 filter === 'human_handoff'
                   ? 'bg-white text-[#92400E] shadow-2xs font-semibold'
-                  : 'text-[#575653] hover:text-[#141413]',
+                  : 'text-[#575653]',
               ].join(' ')}
             >
               <span>🔥 Humano</span>
-              <span className="font-mono metric-mono text-[10px] px-1 rounded bg-amber-500/15 text-[#92400E]">
+              <span className="font-mono metric-mono text-[9px] px-1 rounded bg-amber-500/15 text-[#92400E]">
                 {counts.human}
               </span>
             </button>
@@ -493,14 +586,14 @@ export default function BusinessInboxPage() {
               type="button"
               onClick={() => setFilter('ai_active')}
               className={[
-                'h-7 rounded text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer',
+                'h-6 rounded text-[10px] font-medium transition flex items-center justify-center gap-0.5 cursor-pointer',
                 filter === 'ai_active'
                   ? 'bg-white text-[#065F46] shadow-2xs font-semibold'
-                  : 'text-[#575653] hover:text-[#141413]',
+                  : 'text-[#575653]',
               ].join(' ')}
             >
               <span>🤖 IA</span>
-              <span className="font-mono metric-mono text-[10px] text-[#8A8884]">
+              <span className="font-mono metric-mono text-[9px] text-[#8A8884]">
                 ({counts.ai})
               </span>
             </button>
@@ -519,7 +612,7 @@ export default function BusinessInboxPage() {
                 type="button"
                 onClick={() => setSelectedId(conv.id)}
                 className={[
-                  'w-full text-left p-3 transition-colors relative flex flex-col gap-1.5 cursor-pointer',
+                  'w-full text-left p-2.5 transition-colors relative flex flex-col gap-1 cursor-pointer',
                   isHandoff
                     ? 'border-l-[3px] border-l-[#D97706]'
                     : 'border-l-[3px] border-l-transparent',
@@ -531,45 +624,35 @@ export default function BusinessInboxPage() {
                 ].join(' ')}
               >
                 {/* Fila 1: Nombre + Timestamp */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-semibold text-[#141413] truncate">
-                      {conv.customerName}
-                    </span>
-                    {conv.unreadCount > 0 && (
-                      <span className="h-4 min-w-4 px-1 rounded-full bg-[#D97706] text-white font-mono metric-mono text-[10px] font-semibold flex items-center justify-center">
-                        {conv.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] font-mono metric-mono text-[#8A8884] shrink-0">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-xs font-semibold text-[#141413] truncate">
+                    {conv.customerName}
+                  </span>
+                  <span className="text-[10px] font-mono metric-mono text-[#8A8884] shrink-0">
                     {conv.lastActivityTime}
                   </span>
                 </div>
 
                 {/* Fila 2: Preview del último mensaje */}
-                <p className="text-xs text-[#575653] line-clamp-1 leading-snug">
+                <p className="text-[11px] text-[#575653] line-clamp-1 leading-snug">
                   {conv.lastMessagePreview}
                 </p>
 
-                {/* Fila 3: Estado IA/Humano + Orden activa si existe */}
-                <div className="flex items-center justify-between gap-2 pt-0.5">
+                {/* Fila 3: Estado IA/Humano */}
+                <div className="flex items-center justify-between gap-1 pt-0.5">
                   {isHandoff ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#D97706]" />
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">
                       HUMANO AL MANDO
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
-                      IA Agilizio
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                      IA RESPONDIENDO
                     </span>
                   )}
 
                   {conv.activeOrder && (
-                    <span className="text-[10px] font-mono metric-mono font-medium text-[#575653] bg-[#F3F1EC] px-1.5 py-0.5 rounded border border-[#E8E6DF]">
-                      {conv.activeOrder.orderNumber} ·{' '}
-                      {formatCop(conv.activeOrder.totalCop)}
+                    <span className="text-[9px] font-mono metric-mono text-[#575653] bg-[#F3F1EC] px-1 rounded">
+                      {conv.activeOrder.orderNumber}
                     </span>
                   )}
                 </div>
@@ -587,105 +670,52 @@ export default function BusinessInboxPage() {
         className="flex-1 flex flex-col h-full min-w-0 bg-[#FAF8F5] overflow-hidden"
       >
         {/* Barra Superior de Control e Intervención 1-Clic */}
-        <header className="h-14 shrink-0 px-5 bg-white border-b border-[#E8E6DF] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-[#F3F1EC] border border-[#D5D2C8] flex items-center justify-center text-xs font-semibold text-[#141413] shrink-0">
+        <header className="h-12 shrink-0 px-4 bg-white border-b border-[#E8E6DF] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-7 w-7 rounded-full bg-[#F3F1EC] border border-[#D5D2C8] flex items-center justify-center text-xs font-semibold text-[#141413] shrink-0">
               {selectedConversation.customerInitials}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-[#141413] truncate">
-                  {selectedConversation.customerName}
-                </h2>
-                <span className="text-[11px] text-[#575653] bg-[#F3F1EC] px-1.5 py-0.5 rounded border border-[#E8E6DF] truncate">
-                  {selectedConversation.neighborhood}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono metric-mono text-[#8A8884] mt-0.5">
-                {selectedConversation.customerPhone}
-              </p>
+              <h2 className="text-xs font-semibold text-[#141413] truncate leading-none">
+                {selectedConversation.customerName}
+              </h2>
+              <span className="text-[10px] font-mono metric-mono text-[#8A8884] block mt-0.5">
+                {selectedConversation.customerPhone} · {selectedConversation.neighborhood}
+              </span>
             </div>
           </div>
 
-          {/* CONMUTADOR DE HANDOFF HUMANO 1-CLIC */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Switch de Handoff 1-Clic */}
+          <div className="flex items-center gap-2 shrink-0">
             {isAiActive ? (
-              <div className="flex items-center gap-2.5 bg-[#FAF8F5] border border-[#D5D2C8] px-3 py-1.5 rounded-md">
-                <StatusPill
-                  status="ai_active"
-                  label="IA Respondiendo"
-                  metric="24/7"
-                  pulse
-                />
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() =>
-                    handleToggleConversationMode('human_handoff')
-                  }
-                >
-                  Pausar IA · Tomar control
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => handleToggleConversationMode('human_handoff')}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" />
+                Pausar IA
+              </Button>
             ) : (
-              <div className="flex items-center gap-2.5 bg-[#FFFBEB] border border-[#FDE68A] px-3 py-1.5 rounded-md">
-                <StatusPill
-                  status="human_handoff"
-                  label="Control Humano Activo"
-                />
-                <Button
-                  variant="primary"
-                  size="xs"
-                  onClick={() => handleToggleConversationMode('ai_active')}
-                >
-                  Reactivar IA
-                </Button>
-              </div>
+              <Button
+                variant="primary"
+                size="xs"
+                onClick={() => handleToggleConversationMode('ai_active')}
+              >
+                Reactivar IA
+              </Button>
             )}
           </div>
         </header>
 
-        {/* Sub-barra de Alerta cuando está en Handoff Humano */}
-        {!isAiActive && (
-          <div className="px-5 py-2 bg-[#FFFBEB] border-b border-[#FDE68A] flex items-center justify-between text-xs text-[#92400E] shrink-0">
-            <div className="flex items-center gap-2 truncate">
-              <span className="font-semibold">
-                ⚡ Intervención Humana en Curso:
-              </span>
-              <span className="truncate">
-                {selectedConversation.handoffReason ??
-                  'El agente IA está en pausa para evitar pisar tus respuestas.'}
-              </span>
-            </div>
-            <Switch
-              size="sm"
-              variant="emerald"
-              checked={isAiActive}
-              onCheckedChange={(checked) =>
-                handleToggleConversationMode(
-                  checked ? 'ai_active' : 'human_handoff'
-                )
-              }
-              label="Devolver a IA"
-            />
-          </div>
-        )}
-
         {/* Historial de Mensajes */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {selectedConversation.messages.map((message) => {
             if (message.sender === 'system_event') {
               return (
-                <div
-                  key={message.id}
-                  className="flex items-center justify-center my-2"
-                >
-                  <div className="px-3 py-1 rounded-full bg-[#F3F1EC] border border-[#E8E6DF] text-[11px] text-[#575653] flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#D97706]" />
-                    <span>{message.text}</span>
-                    <span className="font-mono metric-mono text-[10px] text-[#8A8884]">
-                      {message.timestamp}
-                    </span>
+                <div key={message.id} className="flex justify-center my-1.5">
+                  <div className="px-2.5 py-0.5 rounded-full bg-[#F3F1EC] text-[10px] text-[#575653]">
+                    {message.text}
                   </div>
                 </div>
               );
@@ -698,199 +728,163 @@ export default function BusinessInboxPage() {
               <div
                 key={message.id}
                 className={[
-                  'flex flex-col max-w-[78%]',
+                  'flex flex-col max-w-[82%]',
                   isCustomer ? 'mr-auto items-start' : 'ml-auto items-end',
                 ].join(' ')}
               >
-                {/* Píldora de Trazabilidad de Herramienta ejecutada por la IA */}
                 {isAi && message.toolExecuted && (
-                  <div className="mb-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0F291E]/5 border border-[#0F291E]/15 text-[10px] font-mono metric-mono text-[#0F291E]">
-                    <span>⚡ Tool:</span>
-                    <span className="font-semibold">{message.toolExecuted}</span>
-                  </div>
+                  <span className="mb-0.5 text-[9px] font-mono metric-mono text-[#0F291E] bg-[#EEF5F1] px-1 rounded">
+                    ⚡ {message.toolExecuted}
+                  </span>
                 )}
 
-                {/* Burbuja de Mensaje */}
                 <div
                   className={[
-                    'px-3.5 py-2.5 text-[13px] leading-relaxed shadow-2xs',
+                    'px-3 py-2 text-xs leading-relaxed shadow-2xs',
                     isCustomer
                       ? 'bg-white border border-[#E8E6DF] text-[#141413] rounded-lg rounded-tl-xs'
                       : isAi
                         ? 'bg-[#EEF5F1] border border-[#CDE2D6] text-[#0F291E] rounded-lg rounded-tr-xs'
-                        : 'bg-[#141413] border border-[#141413] text-[#FAF8F5] rounded-lg rounded-tr-xs',
+                        : 'bg-[#141413] text-[#FAF8F5] rounded-lg rounded-tr-xs',
                   ].join(' ')}
                 >
                   <p>{message.text}</p>
                 </div>
 
-                {/* Metadatos inferiores de la burbuja */}
-                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#8A8884]">
-                  <span className="font-medium">
-                    {isCustomer
-                      ? selectedConversation.customerName
-                      : isAi
-                        ? '🤖 Agente Agilizio'
-                        : `👤 ${message.authorName}`}
-                  </span>
+                <div className="mt-0.5 flex items-center gap-1 text-[9px] text-[#8A8884] font-mono metric-mono">
+                  <span>{isCustomer ? 'Cliente' : isAi ? '🤖 Agilizio' : '👤 Cajero'}</span>
                   <span>·</span>
-                  <span className="font-mono metric-mono">
-                    {message.timestamp}
-                  </span>
+                  <span>{message.timestamp}</span>
                   {isAi && message.latencyMs && (
                     <>
                       <span>·</span>
-                      <span className="font-mono metric-mono text-[#065F46]">
-                        {(message.latencyMs / 1000).toFixed(1)}s
-                      </span>
+                      <span className="text-[#065F46]">{(message.latencyMs / 1000).toFixed(1)}s</span>
                     </>
                   )}
                 </div>
               </div>
             );
           })}
+
+          {isAiReplying && (
+            <div className="mr-auto items-start flex flex-col">
+              <div className="px-3 py-1.5 rounded-lg bg-white border border-[#E8E6DF] text-xs text-[#575653] flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                <span>Gemini respondiendo...</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Compositor de Respuesta (Cajero / Administrador) */}
-        <footer className="p-3.5 bg-white border-t border-[#E8E6DF] shrink-0">
-          <form onSubmit={handleSendHumanMessage} className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] px-1">
-              <span className="text-[#575653]">
-                {isAiActive ? (
-                  <>
-                    🤖 <strong>Modo Automático:</strong> Si envías un mensaje
-                    manual, Agilizio pausará la IA automáticamente.
-                  </>
-                ) : (
-                  <>
-                    👤 <strong>Respondiendo como Don Andrés (Caja 1)</strong>{' '}
-                    vía WhatsApp Cloud API oficial.
-                  </>
-                )}
-              </span>
-              <span className="font-mono metric-mono text-[#8A8884]">
-                Enter para enviar
-              </span>
+        {/* Compositor con selector de Modo: Enviar como Cajero vs Probar como Cliente */}
+        <footer className="p-3 bg-white border-t border-[#E8E6DF] shrink-0 space-y-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <div className="inline-flex p-0.5 rounded bg-[#F3F1EC] border border-[#E8E6DF]">
+              <button
+                type="button"
+                onClick={() => setSendAsRole('simulate_customer')}
+                className={[
+                  'px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer',
+                  sendAsRole === 'simulate_customer'
+                    ? 'bg-[#0F291E] text-white font-semibold'
+                    : 'text-[#575653]',
+                ].join(' ')}
+              >
+                🧪 Escribir como Cliente (Probar IA)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendAsRole('staff')}
+                className={[
+                  'px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer',
+                  sendAsRole === 'staff'
+                    ? 'bg-amber-600 text-white font-semibold'
+                    : 'text-[#575653]',
+                ].join(' ')}
+              >
+                👤 Escribir como Cajero (Intervenir)
+              </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={draftMessage}
-                onChange={(e) => setDraftMessage(e.target.value)}
-                placeholder={
-                  isAiActive
-                    ? 'Escribe para intervenir manualmente en la conversación...'
-                    : `Escribe un mensaje a ${selectedConversation.customerName}...`
-                }
-                className="flex-1 h-9 px-3 text-[13px] bg-[#FAF8F5] border border-[#D5D2C8] rounded-md text-[#141413] placeholder:text-[#8A8884] focus:outline-none focus:bg-white focus:border-[#0F291E] transition-colors"
-              />
-              <Button
-                type="submit"
-                variant={isAiActive ? 'secondary' : 'primary'}
-                size="md"
-                disabled={draftMessage.trim().length === 0}
-              >
-                {isAiActive ? 'Intervenir y Enviar' : 'Enviar a WhatsApp'}
-              </Button>
-            </div>
+            <span className="text-[10px] text-[#8A8884] hidden sm:inline">
+              {sendAsRole === 'simulate_customer'
+                ? 'El bot responderá en vivo'
+                : 'Pausará la IA'}
+            </span>
+          </div>
+
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={draftMessage}
+              onChange={(e) => setDraftMessage(e.target.value)}
+              disabled={isAiReplying}
+              placeholder={
+                sendAsRole === 'simulate_customer'
+                  ? 'Escribe un pedido o pregunta como comensal...'
+                  : 'Escribe para responder como cajero humano...'
+              }
+              className="flex-1 h-8 px-2.5 text-xs bg-[#FAF8F5] border border-[#D5D2C8] rounded-md text-[#141413] focus:outline-none focus:bg-white focus:border-[#0F291E]"
+            />
+            <Button
+              type="submit"
+              variant={sendAsRole === 'simulate_customer' ? 'primary' : 'amber'}
+              size="sm"
+              disabled={isAiReplying || draftMessage.trim().length === 0}
+            >
+              {sendAsRole === 'simulate_customer' ? 'Probar IA' : 'Enviar'}
+            </Button>
           </form>
         </footer>
       </section>
 
       {/* =====================================================================
-          COLUMNA 3: FICHA DE CLIENTE / MINI-CRM GASTRONÓMICO (300px FIJOS)
+          COLUMNA 3: FICHA DE CLIENTE MINI-CRM (OCULTA EN PANTALLAS PEQUEÑAS < LG)
       ===================================================================== */}
       <aside
         aria-label="Ficha de cliente Mini-CRM"
-        className="w-[300px] h-full border-l border-[#E8E6DF] bg-white flex flex-col overflow-y-auto divide-y divide-[#E8E6DF]"
+        className="hidden lg:flex w-[280px] h-full border-l border-[#E8E6DF] bg-white flex-col overflow-y-auto divide-y divide-[#E8E6DF] shrink-0"
       >
-        {/* Bloque 1: Valor de Vida del Cliente (LTV) */}
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A8884]">
-              Ficha de Comensal
-            </span>
-            <span className="text-[11px] font-mono metric-mono text-[#0F291E] font-semibold bg-[#EEF5F1] px-2 py-0.5 rounded border border-[#CDE2D6]">
-              ID #{selectedConversation.id.replace('conv-', '')}
-            </span>
-          </div>
+        {/* LTV */}
+        <div className="p-3.5 space-y-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8884]">
+            Ficha del Comensal
+          </span>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2.5 rounded-lg bg-[#FAF8F5] border border-[#E8E6DF]">
-              <span className="text-[10px] text-[#8A8884] block">
-                Ventas Acumuladas
-              </span>
-              <span className="text-sm font-semibold font-mono metric-mono text-[#141413] mt-0.5 block">
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="p-2 rounded bg-[#FAF8F5] border border-[#E8E6DF]">
+              <span className="text-[9px] text-[#8A8884] block">Ventas</span>
+              <span className="text-xs font-bold font-mono metric-mono text-[#141413]">
                 {formatCop(selectedConversation.ltvTotalSpentCop)}
               </span>
             </div>
-
-            <div className="p-2.5 rounded-lg bg-[#FAF8F5] border border-[#E8E6DF]">
-              <span className="text-[10px] text-[#8A8884] block">
-                Pedidos / Ticket Prom.
-              </span>
-              <span className="text-sm font-semibold font-mono metric-mono text-[#141413] mt-0.5 block">
-                {selectedConversation.ltvTotalOrders} ·{' '}
+            <div className="p-2 rounded bg-[#FAF8F5] border border-[#E8E6DF]">
+              <span className="text-[9px] text-[#8A8884] block">Ticket Prom.</span>
+              <span className="text-xs font-bold font-mono metric-mono text-[#141413]">
                 {formatCop(selectedConversation.averageTicketCop)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Bloque 2: Comanda Activa en Curso (KDS Link) */}
-        {selectedConversation.activeOrder && (
-          <div className="p-4 space-y-2.5 bg-[#FAF8F5]/60">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A8884]">
-                Comanda en Curso
-              </span>
-              <StatusPill
-                status="kitchen_alert"
-                label={selectedConversation.activeOrder.status}
-                metric={`${selectedConversation.activeOrder.elapsedMinutes}m`}
-              />
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-[#D5D2C8] shadow-2xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono metric-mono font-bold text-[#141413]">
-                  {selectedConversation.activeOrder.orderNumber}
-                </span>
-                <span className="text-xs font-mono metric-mono font-semibold text-[#0F291E]">
-                  {formatCop(selectedConversation.activeOrder.totalCop)}
-                </span>
-              </div>
-
-              <p className="text-xs text-[#575653] leading-snug">
-                {selectedConversation.activeOrder.itemsSummary}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Bloque 3: Etiquetas Operativas y Preferencias de Parrilla */}
-        <div className="p-4 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A8884]">
-              Etiquetas Operativas
-            </span>
-            <span className="text-[10px] text-[#8A8884]">Clic para alternar</span>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
+        {/* Tags */}
+        <div className="p-3.5 space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8884]">
+            Etiquetas
+          </span>
+          <div className="flex flex-wrap gap-1">
             {QUICK_TAGS_CATALOG.map((tag) => {
-              const isSelectedTag = selectedConversation.tags.includes(tag);
+              const isSelected = selectedConversation.tags.includes(tag);
               return (
                 <button
                   key={tag}
                   type="button"
                   onClick={() => handleToggleTag(tag)}
                   className={[
-                    'px-2 py-1 rounded-md text-[11px] font-medium border transition-all cursor-pointer select-none',
-                    isSelectedTag
-                      ? 'bg-[#0F291E] text-[#FAF8F5] border-[#0F291E] shadow-2xs'
-                      : 'bg-[#FAF8F5] text-[#575653] border-[#E8E6DF] hover:border-[#D5D2C8]',
+                    'px-2 py-0.5 rounded text-[10px] border transition cursor-pointer',
+                    isSelected
+                      ? 'bg-[#0F291E] text-white border-[#0F291E]'
+                      : 'bg-[#FAF8F5] text-[#575653] border-[#E8E6DF]',
                   ].join(' ')}
                 >
                   {tag}
@@ -900,35 +894,28 @@ export default function BusinessInboxPage() {
           </div>
         </div>
 
-        {/* Bloque 4: Notas Técnicas de Cocina y Alergias */}
-        <div className="p-4 space-y-2 flex-1 flex flex-col">
+        {/* Notas */}
+        <div className="p-3.5 space-y-1 flex-1 flex flex-col">
           <div className="flex items-center justify-between">
             <label
-              htmlFor="kitchen-notes-textarea"
-              className="text-[11px] font-semibold uppercase tracking-wider text-[#8A8884]"
+              htmlFor="notes-textarea"
+              className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8884]"
             >
-              Notas de Cocina y Domicilio
+              Notas de Cocina
             </label>
             {notesSavedIndicator && (
-              <span className="text-[10px] font-mono metric-mono text-[#065F46] bg-[#ECFDF5] px-1.5 py-0.5 rounded border border-[#A7F3D0]">
-                ✓ Guardado
-              </span>
+              <span className="text-[9px] font-mono text-[#065F46]">✓ Guardado</span>
             )}
           </div>
-
           <textarea
-            id="kitchen-notes-textarea"
-            rows={5}
+            id="notes-textarea"
+            rows={4}
             value={selectedConversation.kitchenNotes}
             onChange={handleUpdateKitchenNotes}
             onBlur={handleNotesBlur}
-            placeholder="Ej: Término preferido, alergias, indicaciones de portería..."
-            className="w-full p-2.5 rounded-lg bg-[#FAF6EE] border border-[#E6DEC8] text-xs font-mono text-[#141413] placeholder:text-[#8A8884] leading-relaxed focus:outline-none focus:border-[#D97706] resize-none"
+            placeholder="Preferencias de cocción o alergias..."
+            className="w-full p-2 rounded bg-[#FAF6EE] border border-[#E6DEC8] text-xs font-mono text-[#141413] resize-none focus:outline-none"
           />
-          <p className="text-[10px] text-[#8A8884] leading-normal">
-            Estas notas se inyectan automáticamente en el contexto del Agente IA
-            cuando el comensal vuelve a escribir.
-          </p>
         </div>
       </aside>
     </div>
